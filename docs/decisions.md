@@ -25,3 +25,19 @@ A Janus 0.1 és 0.2 (Run 1–4) döntései és eredményei a `janus_01` repóban
 **A fej változatlan** (átlagolás, dropout 0.3, egy lineáris réteg), csak 64 helyett 256 bemenettel. Egy változó: a törzs.
 
 **Tanítás változatlan:** LFCC, maszkolás, cosine, 30 epoch, batch 64, Adam lr 1e-3. Nagyobb modellhez gyakran kisebb lr kell; ha a dev görbe az első epochokban ugrál vagy NaN jön, az lr lesz az első, amit módosítunk, és az külön futás lesz.
+
+## 2026-10-26 – Seed a tanításban (`src/train.py --seed`)
+
+**Miért kell.** (1) Megismételhetőség: ugyanaz a parancs ugyanazt a modellt adja, a dolgozat számai visszakövethetők. (2) A konzulens kérése (2026-10-25): verziónként több futás, átlag ± szórás. (3) A futások közötti szórás mérése: a Run 5 és 5b eval EER-je szinte azonos (14.03 vs 14.08%), de támadásonként 5–11 pont eltérés is volt. Szórás nélkül nem dönthető el, hogy egy verzióváltás javulása valódi-e.
+
+**Mit rögzít.** `random`, `numpy`, `torch` (CPU és CUDA) seed, `cudnn.deterministic = True`, `cudnn.benchmark = False`. Ez rögzíti a súlyinicializálást, a batch-sorrendet és az augmentációt (a DataLoader workerek seedje a torch RNG-ből származik). Szintetikus adaton, CPU-n, 2 workerrel: ugyanaz a seed betűre azonos logot adott, más seed mást.
+
+**Korlát.** GPU-n néhány művelet visszaterjesztése (pl. `AdaptiveAvgPool2d`) atomikus összeadással fut, ezért két azonos seedű Kaggle-futás apró eltérést mutathat. A seed így is a fő véletlenforrásokat rögzíti; a szórást a különböző seedek közötti eltérés adja, nem ez a zaj. A `torch.use_deterministic_algorithms(True)` hibát dobna ezekre a műveletekre, ezért nincs bekapcsolva.
+
+**Seed nélkül a viselkedés változatlan** (nincs rögzítés, a cudnn beállítások alapértelmezettek), így a korábbi parancsok ugyanúgy futnak.
+
+**`train_log.txt`.** Minden, ami eddig a képernyőre ment (első sor: seed, feature, epoch, batch, lr; epochonként lr, train loss, dev EER; a végén a legjobb dev EER), a `--out` mappába is kiíródik. Eddig a logot a Kaggle Logs fülről kellett kimásolni, és a Run 5-nél sorok hiányoztak belőle.
+
+**Közös LFCC-cache a 0.2 és a 0.3 között.** A két repó `features.py`, `dataset.py` és `config.yaml` fájlja azonos, ezért a `/tmp/cache/*/lfcc` egyszer épül fel egy munkamenetben.
+
+**Szórás:** mintaszórás (ddof=1), n = 3.

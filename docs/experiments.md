@@ -85,3 +85,23 @@ Viszonyítás a janus_01-ből (teljes ASVspoof 2019 LA eval halmaz, 71 237 fájl
 - **Az összesített eval EER stabil:** 14.03% és 14.08%, két független tanítás (más véletlen kezdősúlyok, más batch-sorrend, más augmentáció). A 0.2 → 0.3 javulás (21.2 → 14.1%) tehát nem szerencse.
 - **A támadásonkénti számok viszont szórnak:** A15 6.2 vs 17.6%, A13 18.2 vs 12.9%, A14 2.5 vs 5.2%. Egy-egy támadásnál a futások közti különbség 5–11 százalékpont is lehet. A dolgozatban a támadásonkénti számokat óvatosan kell értelmezni; egyetlen futásból csak a nagy különbségek (pl. A16 26 → 11%) megbízhatók.
 - **A dolgozat a Run 5b számait használja,** mert ehhez van mentett checkpoint és pontszámfájl.
+
+## Seedes futások: Janus 0.1–0.3 × seed 0/1/2 (tervezett, határnap: 2026-11-05)
+
+**Miért:** a 7. fejezetbe átlag ± szórás kell, nem egyetlen futás. Különösen a 0.1 → 0.2 lépés (23.52 → 21.16%, 2.4 pont) kérdéses: a Run 5 / 5b párból látszik, hogy támadásonként 5–11 pont is lehet a futások közti különbség.
+
+**Csak a seed új.** Config, 30 epoch, batch 64, Adam lr 1e-3, cosine, `--augment`, `--workers 2` betűre ugyanaz, mint Run 3, Run 4 és Run 5b. A kód egyetlen változása a `src/train.py --seed` kapcsoló és a `train_log.txt` (döntésnapló, 2026-10-26).
+
+| Kaggle-munkamenet | Notebook | Verzió | Repó, config | Kimenet |
+|---|---|---|---|---|
+| 1 (LFCC) | `janus_03/notebooks/04_seeds_lfcc_kaggle.ipynb` | 0.2 | janus_01, `config.yaml` | `out/v02_seed0…2` |
+| 1 (LFCC) | ugyanaz | 0.3 | janus_03, `config.yaml` | `out/v03_seed0…2` |
+| 2 (mel) | `janus_01/notebooks/04_seeds_mel_kaggle.ipynb` | 0.1 | janus_01, `config_mel.yaml` | `out/v01_seed0…2` |
+
+**Sorrend:** előbb az 1. munkamenet (a 0.2 és 0.3 a fontosabb), utána a 2. Ha a 0.1 nem fér bele a határnapig, a 0.1-nél az egyetlen Run 3 marad, és ez a korlátok közé kerül.
+
+**Kimenet futásonként:** `train_log.txt`, `janus_best.pt`, `eval_scores.csv`, `eval_per_attack.csv`, `commit.txt` (repó, commit, config, seed).
+
+**Összesítés:** `python scripts/summarize_seeds.py --runs <letöltött out mappák> --out <mappa>` → `summary.md` (összesített dev/eval EER, támadásonként, K2: ismert A16+A19 vs. ismeretlen A07–A15, A17, A18; mindegyik átlag ± mintaszórás). Ellenőrizve a Run 5b mentett pontszámain: eval 14.08% (egyezik); K2: ismert 7.95%, ismeretlen 15.20%.
+
+**Eredmény:** (futások után)
