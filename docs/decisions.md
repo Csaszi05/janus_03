@@ -26,6 +26,18 @@ A Janus 0.1 és 0.2 (Run 1–4) döntései és eredményei a `janus_01` repóban
 
 **Tanítás változatlan:** LFCC, maszkolás, cosine, 30 epoch, batch 64, Adam lr 1e-3. Nagyobb modellhez gyakran kisebb lr kell; ha a dev görbe az első epochokban ugrál vagy NaN jön, az lr lesz az első, amit módosítunk, és az külön futás lesz.
 
+## 2026-10-19 – Saját hangfájl pontozása (`src/predict.py`)
+
+**Helyben fut, nem Kaggle-ön.** Egy fájl pontozásához nem kell GPU; a checkpoint kb. 15 MB (1,2 millió súly, plusz az Adam optimalizáló állapota). A tanítás és a kiértékelés marad Kaggle-ön.
+
+**Ugyanaz a feldolgozás, mint tanításkor.** Az audio config a checkpointból jön (16 kHz, csendvágás, LFCC), ahogy az `evaluate.py`-ban.
+
+**Hosszú fájl: 4 s-os darabok, átlagolt logit.** A modell 4 s-ot lát. Hosszabb fájlnál minden 4 s-os darabot külön pontozunk, és a logitok átlagát vesszük. A 2 s-nál rövidebb maradékot eldobjuk, mert nagyrészt kitöltő nulla lenne.
+
+**Küszöb az eval halmaz EER-pontjából, ha megvan az `eval_scores.csv`.** A 0-s logit nem kalibrált küszöb (a pos_weight eltolja). Az EER-küszöb ugyanaz, amivel az EER-t mértük, és a script azt is kiírja, a valódi és a hamis eval-felvételek mekkora része pontozódott alacsonyabbra.
+
+**Korlát:** a modell csak ASVspoof 2019 LA-n tanult (stúdióminőségű angol felolvasás, 2019-es támadások). Telefonos, zajos, más nyelvű vagy modern generátorral készült hangon az ítélet megbízhatatlan. Ez nem hiba, hanem a doménen kívüli használat; az 1.x több adathalmazos tanítása ezt célozza.
+
 ## 2026-10-26 – Seed a tanításban (`src/train.py --seed`)
 
 **Miért kell.** (1) Megismételhetőség: ugyanaz a parancs ugyanazt a modellt adja, a dolgozat számai visszakövethetők. (2) A konzulens kérése (2026-10-25): verziónként több futás, átlag ± szórás. (3) A futások közötti szórás mérése: a Run 5 és 5b eval EER-je szinte azonos (14.03 vs 14.08%), de támadásonként 5–11 pont eltérés is volt. Szórás nélkül nem dönthető el, hogy egy verzióváltás javulása valódi-e.

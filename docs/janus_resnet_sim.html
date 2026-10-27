@@ -1,0 +1,773 @@
+<title>JanusResNet szimuláció</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: egy hosszú, olvasható oszlop (max 980px); minden szakasz a modell egy lépése, a hangtól a döntésig. A JanusCNN-szimuláció folytatása, ugyanazzal a palettával. */
+:root{
+  --bg:#f2f4f6; --surface:#ffffff; --fg:#16212b; --muted:#5d6b78; --line:#d5dde4;
+  --accent:#0f6f8c; --accent-soft:#d6ebf1; --spoof:#b5452f; --bona:#267a5f; --warn:#8a6d1f; --skip:#7a4fb0;
+  --font:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f141a; --surface:#161d25; --fg:#e4ebf1; --muted:#97a5b2; --line:#2a3542;
+  --accent:#4fb6d4; --accent-soft:#18323c; --spoof:#ec7a62; --bona:#4fc49e; --warn:#d9b34c; --skip:#b48ef0; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f141a; --surface:#161d25; --fg:#e4ebf1; --muted:#97a5b2; --line:#2a3542;
+  --accent:#4fb6d4; --accent-soft:#18323c; --spoof:#ec7a62; --bona:#4fc49e; --warn:#d9b34c; --skip:#b48ef0; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.6;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 56px}
+main{max-width:980px;margin:0 auto}
+h1{font-size:2rem;font-weight:600;letter-spacing:-.01em;margin:30px 0 6px;text-wrap:balance}
+h2{font-size:1.3rem;font-weight:600;margin:0 0 6px;text-wrap:balance}
+h3{font-size:1rem;font-weight:600;margin:18px 0 6px}
+p{margin:8px 0;max-width:70ch}
+ul{margin:6px 0;padding-left:20px;max-width:70ch}
+li{margin:3px 0}
+.lead{color:var(--muted);font-size:1.05rem;max-width:72ch}
+.eyebrow{font-family:var(--mono);font-size:.72rem;letter-spacing:.08em;text-transform:uppercase;color:var(--accent);margin-bottom:2px}
+section{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:20px 22px;margin:20px 0;min-width:0}
+nav.toc{display:flex;flex-wrap:wrap;gap:6px;margin:14px 0 4px}
+nav.toc a{font-size:.85rem;color:var(--fg);text-decoration:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:3px 11px}
+nav.toc a:hover{border-color:var(--accent)}
+nav.toc a span{font-family:var(--mono);color:var(--accent);margin-right:5px}
+.controls{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin:12px 0}
+.ctl{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ctl label,.ctl .lbl{color:var(--muted);font-size:.85rem}
+button,select{font:inherit;font-size:.9rem;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:5px 11px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.on{background:var(--accent-soft);border-color:var(--accent)}
+input[type=range]{accent-color:var(--accent);width:180px;max-width:100%}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.muted{color:var(--muted)}
+.small{font-size:.86rem}
+.note{border-left:3px solid var(--warn);padding:4px 12px;margin:12px 0;color:var(--muted);font-size:.92rem;max-width:74ch}
+.key{border-left:3px solid var(--accent);padding:6px 12px;margin:14px 0;background:var(--accent-soft);border-radius:0 6px 6px 0;max-width:74ch}
+.row{display:flex;flex-wrap:wrap;gap:16px}
+.row>*{min-width:0;flex:1 1 280px}
+.scroll{overflow-x:auto;max-width:100%}
+canvas.heat{display:block;width:100%;image-rendering:pixelated;border-radius:4px;background:#000}
+canvas.plot{display:block;width:100%;border-radius:4px}
+.cap{display:flex;justify-content:space-between;gap:8px;font-family:var(--mono);font-size:.72rem;color:var(--muted);margin-top:3px}
+.maplabel{font-family:var(--mono);font-size:.78rem;color:var(--muted);margin:10px 0 3px}
+.maplabel b{color:var(--fg);font-weight:500}
+.stepper{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0}
+.stepper button{font-size:.85rem}
+.stepper button span{font-family:var(--mono);color:var(--accent);margin-right:4px}
+.stage{position:relative}
+.marker{position:absolute;top:0;bottom:18px;width:2px;background:var(--warn);pointer-events:none;transform:translateX(-1px)}
+.heatwrap{position:relative}
+.groups{display:grid;grid-template-columns:44px 1fr;gap:6px;align-items:stretch}
+.glabels{display:flex;flex-direction:column;font-family:var(--mono);font-size:.7rem;color:var(--muted)}
+.glabels div{flex:1;display:flex;align-items:center;justify-content:flex-end;border-right:2px solid var(--line);padding-right:5px}
+.trio{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
+.trio h4{margin:0 0 4px;font-size:.85rem;font-weight:500}
+.big{font-family:var(--mono);font-size:1.5rem;font-weight:500}
+.pill{display:inline-block;padding:2px 11px;border-radius:999px;font-weight:500;font-size:.9rem;color:#fff}
+.pill.spoof{background:var(--spoof)} .pill.bona{background:var(--bona)}
+.gauge{height:14px;border-radius:7px;background:linear-gradient(90deg,var(--bona),var(--spoof));position:relative;margin:10px 0;max-width:420px}
+.gauge i{position:absolute;top:-4px;width:4px;height:22px;background:var(--fg);border-radius:2px;transform:translateX(-50%)}
+table{border-collapse:collapse;width:100%;font-size:.88rem}
+th,td{text-align:left;padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:500;color:var(--muted);font-size:.8rem}
+td.num,th.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tr.sel td{background:var(--accent-soft)}
+svg text{font-family:var(--mono)}
+.diagram{display:block;width:100%;min-width:640px;height:auto}
+.diagram .clk{cursor:pointer}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:.82rem;color:var(--muted);margin-top:6px}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+.tldr{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin:8px 0 14px;max-width:74ch}
+.tldr b{color:var(--accent)}
+.numgrids{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;margin:10px 0}
+.ng{display:grid;grid-template-columns:repeat(4,38px);gap:2px;font-family:var(--mono);font-size:.74rem}
+.ng div{height:28px;display:flex;align-items:center;justify-content:center;border-radius:3px;background:var(--bg);border:1px solid var(--line)}
+.ng div.neg{color:var(--spoof)} .ng div.zero{color:var(--muted)}
+.ngw h4{margin:0 0 4px;font-size:.78rem;font-weight:500;font-family:var(--mono);color:var(--muted)}
+.op{font-family:var(--mono);font-size:1.2rem;color:var(--muted)}
+.math{font-family:var(--mono);font-size:.9rem;background:var(--bg);border-radius:6px;padding:10px 14px;margin:10px 0;line-height:1.9;overflow-x:auto}
+.readout{font-family:var(--mono);font-size:.85rem;background:var(--bg);border-radius:6px;padding:8px 12px;margin-top:10px;overflow-x:auto}
+dl{display:grid;grid-template-columns:minmax(120px,190px) 1fr;gap:8px 18px;margin:8px 0}
+dt{font-weight:600}
+dd{margin:0;color:var(--fg);max-width:64ch}
+@media (max-width:560px){dl{grid-template-columns:1fr} dd{margin-bottom:6px} section{padding:16px 14px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<main>
+<header>
+  <div class="eyebrow">Janus 0.3 · janus_03 · ASVspoof 2019 LA</div>
+  <h1>JanusResNet szimuláció</h1>
+  <p class="lead">Ez az oldal végigvezet azon, mit csinál a Janus 0.3 egy hangfelvétellel, a nyers hullámformától a „valódi vagy hamis” döntésig. Minden szakaszban van valami, amit kipróbálhatsz. A méretek, paraméterszámok és rétegek pontosan a <span class="mono">src/model.py</span> és a <span class="mono">config.yaml</span> szerint vannak.</p>
+  <nav class="toc" aria-label="Tartalom">
+    <a href="#attekintes"><span>0</span>Áttekintés</a>
+    <a href="#lfcc"><span>1</span>Hangból LFCC</a>
+    <a href="#blokk"><span>2</span>A reziduális blokk</a>
+    <a href="#gradiens"><span>3</span>Miért segít</a>
+    <a href="#csatorna"><span>4</span>Csatornaváltás</a>
+    <a href="#ot"><span>5</span>Az öt blokk</a>
+    <a href="#fej"><span>6</span>A fej</a>
+    <a href="#tanitas"><span>7</span>Tanítás</a>
+    <a href="#osszevetes"><span>8</span>0.1 · 0.2 · 0.3</a>
+    <a href="#szoszedet"><span>·</span>Szószedet</a>
+  </nav>
+</header>
+
+<section id="attekintes">
+  <div class="eyebrow">0 · Áttekintés</div>
+  <h2>Az út egy mondatban</h2>
+  <div class="tldr"><b>Röviden.</b> Hang → kép a hangról → öt blokk sűríti → egy szám. Ha a szám pozitív, a modell hamisnak tartja.</div>
+  <p>A hangból egy 60 × 401-es számtáblázat lesz (LFCC), ezt öt reziduális blokk egyre kisebb, de egyre „mélyebb” képpé sűríti, a végén a fej 256 számból egyetlen számot csinál: ha pozitív, a modell hamisnak tartja a felvételt.</p>
+  <div class="scroll">
+    <svg class="diagram" id="pipe" viewBox="0 0 960 150" role="img" aria-label="A modell lépései balról jobbra"></svg>
+  </div>
+  <p class="small muted">Kattints egy lépésre, és odaugrik a hozzá tartozó szakaszhoz. A számok a tenzor alakját mutatják: csatorna × sor × oszlop.</p>
+  <div class="key">A 0.2-höz képest csak a középső rész változott: a három sima blokk helyett öt reziduális blokk van. A bemenet (LFCC) és a fej ugyanaz. Ezért ha a 0.3 jobb lesz, az csak a modellnek tudható be.</div>
+</section>
+
+<section id="lfcc">
+  <div class="eyebrow">1 · Bemenet</div>
+  <h2>Hangból LFCC, lépésről lépésre</h2>
+  <div class="tldr"><b>Röviden.</b> A hangot 10 ms-os szeletekre bontjuk, minden szeletből 60 számot számolunk. Így lesz egy 60 × 401-es kép. A modell ezt a képet nézi, nem a hangot.</div>
+  <p>A modell nem hangot kap, hanem egy képet a hangról. Ez a kép az LFCC (lineáris frekvenciájú kepsztrális együtthatók). Hat lépésben készül. Válassz egy hangot, és lépkedj végig rajta.</p>
+  <div class="controls">
+    <div class="ctl" role="group" aria-label="Hang választása">
+      <span class="lbl">Hang:</span>
+      <button id="snd-bona" class="on" data-kind="bona">Valódi beszéd</button>
+      <button id="snd-voc" data-kind="voc">Neurális vocoder</button>
+      <button id="snd-gl" data-kind="gl">Griffin-Lim</button>
+    </div>
+  </div>
+  <p class="note">A hangok szintetikusak, a böngésző generálja őket, hogy a különbségek jól látsszanak. A vocoderes változatból hiányzik a 5 kHz feletti tartomány, és a szünetekben szinte digitális csend van. A Griffin-Lim változat fázisa képkockánként szétesik, ettől „fémes”, szétkent a spektruma. A valódi ASVspoof-támadások ennél finomabbak, de ugyanilyen típusú nyomokat hagynak.</p>
+
+  <div class="stepper" id="stepper" role="group" aria-label="Lépések">
+    <button data-step="0" class="on"><span>1</span>Hullámforma</button>
+    <button data-step="1"><span>2</span>Spektrogram</button>
+    <button data-step="2"><span>3</span>Szűrőbank</button>
+    <button data-step="3"><span>4</span>Log energia</button>
+    <button data-step="4"><span>5</span>DCT → 20 LFCC</button>
+    <button data-step="5"><span>6</span>+ Δ, ΔΔ → 60 sor</button>
+  </div>
+
+  <div class="stage" id="stage"></div>
+  <div id="stagetext"></div>
+
+  <h3>Egy oszlop közelről</h3>
+  <p>A kép minden oszlopa 10 ms hangot ír le. Húzd a csúszkát, és nézd meg, hogyan lesz egyetlen oszlopból 257 spektrumértéken át 20 szűrő-energia, majd 20 LFCC-szám. A narancs vonal a fenti képen mutatja, hol jársz.</p>
+  <div class="controls">
+    <div class="ctl"><label for="frame">Oszlop (idő):</label><input type="range" id="frame" min="0" max="400" value="120"><span class="mono" id="frame-v"></span></div>
+  </div>
+  <div class="trio">
+    <div><h4>Spektrum ennél az oszlopnál (dB) és a 20 szűrő</h4><canvas class="plot" id="col-spec" height="150"></canvas><div class="cap"><span>0 Hz</span><span>8000 Hz</span></div></div>
+    <div><h4>20 szűrő-energia, logaritmusa</h4><canvas class="plot" id="col-energy" height="150"></canvas><div class="cap"><span>1. szűrő (mély)</span><span>20. (magas)</span></div></div>
+    <div><h4>20 LFCC-együttható (DCT után)</h4><canvas class="plot" id="col-cep" height="150"></canvas><div class="cap"><span>c0</span><span>c19</span></div></div>
+  </div>
+</section>
+
+<section id="blokk">
+  <div class="eyebrow">2 · Az új építőelem</div>
+  <h2>A reziduális blokk</h2>
+  <div class="tldr"><b>Röviden.</b> A blokk kiszámol valamit, és <b>hozzáadja a bemenethez</b>, nem lecseréli vele. Így a blokk csak javít a képen, nem kell újrarajzolnia.</div>
+  <p>A 0.2 blokkja így dolgozott: bemegy egy kép, egy konvolúció átalakítja, és csak az átalakított kép megy tovább. A reziduális blokk egyetlen dolgot ad hozzá: a végén <b>visszaadja a bemenetet</b> is. A bemenet egy rövid úton „átugorja” a rétegeket.</p>
+  <div class="scroll"><svg class="diagram" id="resdiag" viewBox="0 0 960 190" role="img" aria-label="A reziduális blokk felépítése"></svg></div>
+  <div class="readout">kimenet = ReLU( F(x) + x )      ahol   F(x) = BN( conv3×3( ReLU( BN( conv3×3(x) ) ) ) )</div>
+  <p>F(x) a blokk „törzse”: két 3×3-as konvolúció, köztük BatchNorm és ReLU. Ezt már ismered a 0.2-ből, csak itt kettő van egymás után. Az új rész a lila ág: a bemenet változatlanul megkerüli a törzset, és a végén hozzáadódik.</p>
+
+  <h3>Próbáld ki</h3>
+  <p>A bemenet itt a fenti LFCC-kép. A törzs szűrőjét te választod. Az <b>erősség</b> azt mutatja, mennyit számít a törzs: 0-nál a blokk semmit nem tanult, 1-nél teljes erővel dolgozik.</p>
+  <div class="controls">
+    <div class="ctl"><label for="kern">A törzs szűrője:</label>
+      <select id="kern">
+        <option value="time">Időbeli változás (balra-jobbra él)</option>
+        <option value="row">Sorok közti változás (fel-le él)</option>
+        <option value="smooth">Simító (átlag)</option>
+        <option value="sharp">Élesítő</option>
+      </select></div>
+    <div class="ctl"><label for="alpha">Erősség:</label><input type="range" id="alpha" min="0" max="100" value="60"><span class="mono" id="alpha-v"></span></div>
+    <div class="ctl"><button id="skipbtn" class="on" aria-pressed="true">Átugró ág: be</button></div>
+  </div>
+  <div class="maplabel"><b>x</b> · a blokk bemenete (60 × 401)</div><canvas class="heat" id="m-x" style="height:84px"></canvas>
+  <div class="maplabel"><b>F(x)</b> · amit a törzs kiszámol, erősséggel szorozva</div><canvas class="heat" id="m-f" style="height:84px"></canvas>
+  <div class="maplabel" id="m-s-l"><b>F(x) + x</b> · összeadás</div><canvas class="heat" id="m-s" style="height:84px"></canvas>
+  <div class="maplabel"><b>ReLU</b> · a blokk kimenete</div><canvas class="heat" id="m-o" style="height:84px"></canvas>
+  <div class="cap"><span>kék: negatív</span><span>fehér: 0</span><span>piros: pozitív</span></div>
+  <div class="readout" id="res-readout"></div>
+  <div class="key" id="res-insight"></div>
+  <h3>Ugyanez számokkal</h3>
+  <p>Egy 4 × 4-es darab egy blokk belsejéből. A bemenet itt nemnegatív, ahogy a háló belsejében mindig. A fenti erősség-csúszka és az átugró ág gomb ezt is vezérli. Figyeld a sarkokat: ahol F(x) negatív, ott az összeadás csak csökkenti az értéket, de nem törli.</p>
+  <div class="numgrids" id="numgrids"></div>
+  <p class="note">Egyszerűsítés: egy csatorna van, és a BatchNorm itt a kezdeti állapotát mutatja (átlag 0, szórás 1). A ReLU a negatív részt mindig levágja. A háló belsejében ez nem zavar, mert a jelek ott már nemnegatívak (az előző blokk is ReLU-val végződik). Ott 0 erősségnél a kimenet pontosan a bemenet.</p>
+</section>
+
+<section id="gradiens">
+  <div class="eyebrow">3 · Miért segít</div>
+  <h2>A tanulójel útja visszafelé</h2>
+  <div class="tldr"><b>Röviden.</b> Tanításkor a hibajel hátulról előre fut. Sima hálóban útközben elhalványul, reziduális hálóban nem. Ezért lehet a 0.3 sokkal mélyebb a 0.2-nél.</div>
+  <p>Tanításkor a hiba a háló végén keletkezik, és onnan halad visszafelé, rétegről rétegre. Minden réteg ebből a visszafutó jelből (a gradiensből) tudja meg, merre kell változnia. Útközben minden réteg megszorozza a jelet egy számmal.</p>
+  <ul>
+    <li><b>Sima háló:</b> ha ez a szorzó 1-nél kisebb, a jel rétegről rétegre zsugorodik. 20 réteg után 0,75<sup>20</sup> ≈ 0,003. Az első rétegek szinte semmit nem kapnak, nem tanulnak.</li>
+    <li><b>Reziduális háló:</b> az átugró ág miatt a szorzó 1 + (valami kicsi). Az „1” az összeadásból jön: x deriváltja önmagára nézve 1. A jel így majdnem változatlanul ér vissza az elejéig.</li>
+  </ul>
+  <div class="math">sima blokk:        y = F(x)        →   dy/dx = F′(x)        (lehet 0,3 is, 0,05 is)<br>reziduális blokk:  y = F(x) + x    →   dy/dx = F′(x) + 1    (mindig 1 körül)<br>L blokk után:      a jel = a rétegek deriváltjainak szorzata (láncszabály)</div>
+  <p>A láncszabály azt mondja, hogy a jel visszafelé rétegenként összeszorzódik. Ha sok 1-nél kisebb számot szorzunk össze, az eredmény gyorsan a nullához tart. Ha 1 körüli számokat, akkor 1 körül marad. Ez az egész titok.</p>
+  <div class="controls">
+    <div class="ctl"><label for="depth">Rétegek száma:</label><input type="range" id="depth" min="3" max="40" value="20"><span class="mono" id="depth-v"></span></div>
+    <div class="ctl"><label for="fac">Szorzó rétegenként (sima háló):</label><input type="range" id="fac" min="50" max="98" value="75"><span class="mono" id="fac-v"></span></div>
+  </div>
+  <canvas class="plot" id="gradplot" height="230"></canvas>
+  <div class="legend"><span><i style="background:var(--spoof)"></i>sima háló</span><span><i style="background:var(--skip)"></i>reziduális háló</span><span>függőleges tengely: a gradiens nagysága, logaritmikus skálán</span></div>
+  <div class="readout" id="grad-readout"></div>
+  <p class="note">Leegyszerűsített modell: a valódi szorzók rétegenként és tanítás közben is változnak. A jelenség viszont ugyanez, és ezért nem lehetett 2015 előtt 20–30 rétegnél mélyebb hálót jól tanítani. A ResNet ezt az egy összeadással oldotta meg.</p>
+  <h3>A második ok: elég a különbséget megtanulni</h3>
+  <p>Egy sima blokknak a teljes átalakítást kell megtanulnia. Ha a legjobb az lenne, hogy a blokk ne csináljon semmit, azt is meg kell tanulnia, és ez nehéz. A reziduális blokknak csak azt kell megtanulnia, <b>mennyiben tér el</b> a jó kimenet a bemenettől. Ez a „maradék”, angolul residual. Ha nincs mit hozzátenni, a törzs nullát tanul, és a kép változatlanul megy tovább. Ezt láttad a 2. szakaszban, 0 erősségnél.</p>
+</section>
+
+<section id="csatorna">
+  <div class="eyebrow">4 · Egy technikai részlet</div>
+  <h2>Mi van, ha a csatornaszám változik?</h2>
+  <div class="tldr"><b>Röviden.</b> 16 csatornához nem lehet 32-t hozzáadni. Ilyenkor egy egyszerű keverő (1×1-es konvolúció) a 16-ból 32-t csinál, és utána már összeadható.</div>
+  <p>Összeadni csak egyforma alakú képeket lehet. Az első blokkba 1 csatorna megy be, és 16 jön ki. A másodikba 16 megy be, és 32 jön ki. Ilyenkor a bemenetet hozzá kell igazítani, mielőtt hozzáadjuk. Erre való az <b>1×1-es konvolúció</b>.</p>
+  <p>Az 1×1-es konvolúció a kép minden pontján külön dolgozik. Fogja az adott pont 16 csatornaértékét, és ebből 32 új értéket kever ki, mindegyiket egy-egy súlyozott összegként. Térben nem néz szét, csak a csatornákat keveri. Utána egy BatchNorm jön, hogy a skálája illeszkedjen a törzs kimenetéhez.</p>
+  <div class="row">
+    <div><div class="maplabel"><b>bemenet</b> · egy képpont 16 csatornája</div><canvas class="plot" id="c-in" height="54"></canvas></div>
+  </div>
+  <div class="maplabel"><b>súlyok</b> · 32 sor × 16 oszlop = 512 tanulható szám. Vidd az egeret (vagy koppints) egy sorra.</div>
+  <canvas class="plot" id="c-w" height="200"></canvas>
+  <div class="maplabel"><b>kimenet</b> · ugyanennek a pontnak 32 csatornája</div>
+  <canvas class="plot" id="c-out" height="54"></canvas>
+  <div class="readout" id="c-readout"></div>
+  <div class="controls"><button id="c-roll">Új véletlen súlyok</button></div>
+  <p class="small muted">Az 512 a valódi szám: a 2. blokk átugró ágának pontosan ennyi súlya van (16 × 32). Ahol a csatornaszám nem változik, ott az átugró ág egyszerűen a bemenet, súlyok nélkül.</p>
+</section>
+
+<section id="ot">
+  <div class="eyebrow">5 · Az egész törzs</div>
+  <h2>Öt blokk egymás után</h2>
+  <div class="tldr"><b>Röviden.</b> Blokkról blokkra a kép felére zsugorodik, a csatornák száma duplázódik. A végén 256 szám marad, és mindegyik kb. 1,5 másodpercnyi hangot „lát”.</div>
+  <p>Minden blokk után egy 2×2-es MaxPool jön, ami a képet mindkét irányban felezi. Közben a csatornák száma duplázódik. A kép így egyre kisebb lesz, de minden pontja egyre több mindent ír le. Kattints egy lépcsőre.</p>
+  <div class="scroll"><svg class="diagram" id="slabs" viewBox="0 0 960 230" role="img" aria-label="Az öt blokk kimenetének mérete"></svg></div>
+  <div class="row" style="margin-top:6px">
+    <div style="flex:1 1 300px">
+      <div id="slab-info"></div>
+    </div>
+  </div>
+
+  <h3>Számoljuk ki: a 2. blokk 14 528 paramétere</h3>
+  <p>A paraméterszám nem varázslat. Egy 3×3-as konvolúciónak minden (bemenő, kimenő) csatornapárhoz 9 súlya van. Egy BatchNorm-nak csatornánként 2 tanulható száma van (szorzó és eltolás).</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Réteg</th><th>Számítás</th><th class="num">Paraméter</th></tr></thead>
+    <tbody>
+      <tr><td>1. konvolúció 3×3</td><td class="mono">16 be × 32 ki × 9</td><td class="num">4 608</td></tr>
+      <tr><td>BatchNorm</td><td class="mono">2 × 32</td><td class="num">64</td></tr>
+      <tr><td>2. konvolúció 3×3</td><td class="mono">32 be × 32 ki × 9</td><td class="num">9 216</td></tr>
+      <tr><td>BatchNorm</td><td class="mono">2 × 32</td><td class="num">64</td></tr>
+      <tr><td>átugró ág, 1×1 konvolúció</td><td class="mono">16 be × 32 ki × 1</td><td class="num">512</td></tr>
+      <tr><td>átugró ág, BatchNorm</td><td class="mono">2 × 32</td><td class="num">64</td></tr>
+      <tr><td><b>összesen</b></td><td></td><td class="num"><b>14 528</b></td></tr>
+    </tbody></table></div>
+  <p class="small muted">Ugyanígy kijön a többi blokk is, és a fej 256 + 1 = 257 száma. Az összeg 1 224 257, pontosan annyi, amennyit a <span class="mono">model.py</span> helyben kiírt.</p>
+
+  <h3>Mennyit „lát” egy pont?</h3>
+  <p>Egy pont az 5. blokk után nem csak egy kis darabot ismer a bemenetből. Minden konvolúció és pool kicsit kitágítja azt a területet, amire hatással van. Ezt hívják <b>látómezőnek</b> (receptive field). Kattints a képre, és a keret megmutatja, a kiválasztott blokk egy pontja mekkora részt lát a bemenetből.</p>
+  <div class="heatwrap" id="rf-wrap"><canvas class="heat" id="rf-map" style="height:110px;cursor:crosshair"></canvas><svg id="rf-box" style="position:absolute;inset:0;width:100%;height:110px;pointer-events:none" viewBox="0 0 401 60" preserveAspectRatio="none"></svg></div>
+  <div class="cap"><span>0 s</span><span>2 s</span><span>4 s</span></div>
+  <div class="controls" id="rf-btns" role="group" aria-label="Blokk választása a látómezőhöz"></div>
+  <div class="readout" id="rf-readout"></div>
+  <h3>A látómező kiszámolása rétegről rétegre</h3>
+  <p>Két szabály elég hozzá. Egy 3×3-as konvolúció mindkét irányban egy szomszéddal tágít, ezért a látómező 2 × lépésközzel nő. Egy 2×2-es pool a látómezőt a lépésközzel növeli, a lépésközt pedig duplázza. A lépésköz azt mondja meg, hány bemeneti oszlopnyit lépünk, ha az adott rétegben egyet lépünk.</p>
+  <div class="scroll"><table>
+    <thead><tr><th>Blokk</th><th class="num">1. conv után</th><th class="num">2. conv után</th><th class="num">pool után</th><th class="num">lépésköz</th><th class="num">idő</th></tr></thead>
+    <tbody>
+      <tr><td>1. blokk</td><td class="num">3</td><td class="num">5</td><td class="num">6</td><td class="num">2</td><td class="num">0,06 s</td></tr>
+      <tr><td>2. blokk</td><td class="num">10</td><td class="num">14</td><td class="num">16</td><td class="num">4</td><td class="num">0,16 s</td></tr>
+      <tr><td>3. blokk</td><td class="num">24</td><td class="num">32</td><td class="num">36</td><td class="num">8</td><td class="num">0,36 s</td></tr>
+      <tr><td>4. blokk</td><td class="num">52</td><td class="num">68</td><td class="num">76</td><td class="num">16</td><td class="num">0,76 s</td></tr>
+      <tr class="sel"><td>5. blokk</td><td class="num">108</td><td class="num">140</td><td class="num">156</td><td class="num">32</td><td class="num">1,56 s</td></tr>
+    </tbody></table></div>
+  <p class="small muted">A számok oszlopban értendők, egy oszlop 10 ms. A JanusCNN-ben blokkonként csak egy konvolúció volt, ezért ott 3, 10, 22 jön ki.</p>
+  <div class="key">A 0.2 (JanusCNN) legmélyebb pontja kb. 0,22 másodpercet látott. A 0.3 legmélyebb pontja kb. 1,56 másodpercet. Ez hétszer hosszabb összefüggés: a modell egy egész szótagsort, a hangszín változását, a szünetek ritmusát is egyszerre láthatja.</div>
+
+  <h3>Hol vannak a paraméterek?</h3>
+  <p>A 1 224 257 tanulható szám nagyon egyenetlenül oszlik el. Egy 3×3-as konvolúció súlyainak száma: bemenő csatorna × kimenő csatorna × 9. A csatornák duplázása miatt minden blokk kb. négyszer annyi súlyt kap, mint az előző.</p>
+  <canvas class="plot" id="parplot" height="190"></canvas>
+  <p class="small muted">A konvolúciókban nincs külön eltolás (bias), mert közvetlenül utánuk BatchNorm jön, ami úgyis kivonja az átlagot.</p>
+</section>
+
+<section id="fej">
+  <div class="eyebrow">6 · A döntés</div>
+  <h2>A fej: 256 × 1 × 12 számból egyetlen szám</h2>
+  <div class="tldr"><b>Röviden.</b> Átlag, véletlen kikapcsolás tanítás közben, súlyozott összeg. Az eredmény a logit, a szigmoid ebből valószínűséget csinál.</div>
+  <p>Az 5. blokk után 256 csatorna marad, mindegyik egy 1 × 12-es kis sor. A fej három lépésben ebből egy számot csinál. Ez a rész ugyanaz, mint a 0.2-ben, csak 64 helyett 256 csatornával.</p>
+  <h3>1. Átlagolás (AdaptiveAvgPool)</h3>
+  <p>Minden csatorna 12 értékét átlagolja. Ettől lesz mindegy, milyen hosszú a hang: a 12 helyett lehetne 30 is, az átlag akkor is egy szám.</p>
+  <canvas class="plot" id="h-pool" height="70"></canvas>
+  <h3>2. Dropout</h3>
+  <p>Tanítás közben véletlenszerűen kinulláz 30%-ot a 256 számból, a többit pedig 1/0,7-del felszorozza. Így a modell nem támaszkodhat egyetlen csatornára sem. Kiértékeléskor ki van kapcsolva.</p>
+  <div class="controls">
+    <button id="h-train" aria-pressed="false">Tanítás mód (dropout be)</button>
+    <button id="h-roll">Új példa</button>
+  </div>
+  <canvas class="plot" id="h-bars" height="120"></canvas>
+  <h3>3. Egy lineáris réteg</h3>
+  <p>A 256 számot súlyozva összeadja, és hozzáad egy eltolást: logit = w<sub>1</sub>·h<sub>1</sub> + … + w<sub>256</sub>·h<sub>256</sub> + b. Ez 257 tanulható szám. Az eredmény a <b>logit</b>: pozitív = hamis, negatív = valódi.</p>
+  <div class="readout" id="h-readout"></div>
+  <h3>Logitból valószínűség</h3>
+  <p>A szigmoid függvény a logitot 0 és 1 közé nyomja. Húzd a csúszkát.</p>
+  <div class="controls"><div class="ctl"><label for="logit">Logit:</label><input type="range" id="logit" min="-80" max="80" value="15"><span class="mono" id="logit-v"></span></div></div>
+  <div class="gauge" aria-hidden="true"><i id="g-i"></i></div>
+  <div id="g-text"></div>
+  <p class="note">A tanítás a súlyozott bináris keresztentrópiát (BCE) minimalizálja, pos_weight = 0,113-mal, mert a train halmazban kilencszer annyi hamis felvétel van, mint valódi. Az EER méréséhez nem a 0-s küszöböt használjuk: azt a küszöböt keressük, ahol a tévesen elfogadott hamisak és a tévesen elutasított valódiak aránya egyenlő.</p>
+</section>
+
+<section id="tanitas">
+  <div class="eyebrow">7 · Tanítás</div>
+  <h2>Hogyan tanulja meg a súlyokat?</h2>
+  <div class="tldr"><b>Röviden.</b> 64 felvételt mutatunk neki, megnézzük, mennyit téved, és minden súlyt egy picit arra mozdítunk, amerre kevesebbet tévedne. Ezt 11 910-szer ismételjük.</div>
+  <p>Az eddigi szakaszok azt mutatták, mit számol a modell. A súlyok (a konvolúciók 3×3-as mintái, az 1×1-es keverők, a fej 256 súlya) kezdetben véletlenek. A tanítás során állnak be. Egy tanítási lépés így néz ki:</p>
+  <ol style="max-width:70ch;padding-left:22px">
+    <li><b>Előre.</b> 64 felvétel LFCC-képe átmegy a modellen, 64 logit jön ki.</li>
+    <li><b>Hiba.</b> A súlyozott BCE megméri, mennyire tévedett a modell. A valódi felvételek hibája kilencszer többet számít, mert kilencszer kevesebb van belőlük.</li>
+    <li><b>Vissza.</b> A hibából visszafelé kiszámoljuk minden súly gradiensét. Itt segít az átugró ág (3. szakasz).</li>
+    <li><b>Lépés.</b> Az Adam optimalizáló minden súlyt egy kicsit elmozdít a gradienssel ellentétes irányba. A lépés méretét a tanulási ráta adja.</li>
+  </ol>
+  <div class="scroll"><table>
+    <thead><tr><th>Mennyiség</th><th class="num">Érték</th><th>Honnan</th></tr></thead>
+    <tbody>
+      <tr><td>tanító felvétel</td><td class="num">25 380</td><td>ASVspoof 2019 LA train</td></tr>
+      <tr><td>batch</td><td class="num">64</td><td>egyszerre ennyit néz</td></tr>
+      <tr><td>lépés epochonként</td><td class="num">397</td><td>25 380 / 64, felfelé kerekítve</td></tr>
+      <tr><td>epoch</td><td class="num">30</td><td>ennyiszer látja az egész train halmazt</td></tr>
+      <tr><td>összes lépés</td><td class="num">11 910</td><td>397 × 30</td></tr>
+      <tr><td>súlyfrissítés lépésenként</td><td class="num">1 224 257</td><td>minden paraméter mozdul</td></tr>
+    </tbody></table></div>
+  <h3>A tanulási ráta 30 epoch alatt (cosine)</h3>
+  <p>Az elején nagy lépésekkel keres, a végén apró lépésekkel finomít. Húzd a csúszkát, és nézd meg, mekkora a lépés az adott epochban.</p>
+  <div class="controls"><div class="ctl"><label for="ep">Epoch:</label><input type="range" id="ep" min="1" max="30" value="10"><span class="mono" id="ep-v"></span></div></div>
+  <canvas class="plot" id="lrplot" height="160"></canvas>
+  <h3>Mikor mentjük el a modellt?</h3>
+  <p>Minden epoch végén megmérjük a dev EER-t. Ha jobb, mint az eddigi legjobb, elmentjük a súlyokat (a logban ezt jelzi a <span class="mono">*</span>). A végén a legjobb dev EER-ű változatot értékeljük ki az eval halmazon. Az eval halmazt tanítás közben soha nem nézzük, különben az eredmény nem lenne becsületes.</p>
+  <h3>Mit csinál közben az augmentáció?</h3>
+  <p>Minden epochban minden tanító képre két véletlen vízszintes és két függőleges sávot teszünk, amit kitöltünk a kép átlagával. Így a modell nem támaszkodhat egyetlen sorra vagy pillanatra sem. A dev és az eval képek érintetlenek.</p>
+</section>
+
+<section id="osszevetes">
+  <div class="eyebrow">8 · A szakdolgozat lépcsői</div>
+  <h2>0.1 → 0.2 → 0.3</h2>
+  <div class="tldr"><b>Röviden.</b> Minden lépcső egyetlen dolgot változtat. A 0.2 a bemenetet, a 0.3 a modellt.</div>
+  <p>Minden lépcső pontosan egy dolgot változtat, és mindegyiket a teljes eval halmazon mérjük (71 237 fájl, 13 ismeretlen támadás).</p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Verzió</th><th>Bemenet</th><th>Modell</th><th class="num">Paraméter</th><th class="num">Látómező</th><th class="num">Dev EER</th><th class="num">Eval EER</th></tr></thead>
+    <tbody>
+      <tr><td>0.1 (Run 3)</td><td>mel, 80 × 251</td><td>JanusCNN, 3 sima blokk</td><td class="num">23 585</td><td class="num">~0,35 s</td><td class="num">6,99%</td><td class="num">23,52%</td></tr>
+      <tr><td>0.2 (Run 4)</td><td><b>LFCC</b>, 60 × 401</td><td>JanusCNN, 3 sima blokk</td><td class="num">23 585</td><td class="num">~0,22 s</td><td class="num">10,47%</td><td class="num">21,16%</td></tr>
+      <tr class="sel"><td>0.3 (Run 5)</td><td>LFCC, 60 × 401</td><td><b>JanusResNet, 5 reziduális blokk</b></td><td class="num">1 224 257</td><td class="num">~1,56 s</td><td class="num"><b>5,14%</b></td><td class="num"><b>14,08%</b></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="small muted">A 0.1 látómezője másodpercben azért nagyobb, mint a 0.2-é, mert a mel-kép oszlopai 16 ms-osak, az LFCC-éi 10 ms-osak. A hipotézis a 0.3-ra dev EER 5% alatt, eval EER 18% alatt volt. Az eval teljesült, a dev épp nem (5,14%). Két független futás eval EER-je 14,03% és 14,08% lett, tehát a javulás nem szerencse. Viszonyításként: a hivatalos LFCC-GMM baseline eval EER-je 8,09%.</p>
+  <h3>Mit vártunk, és mi lett belőle</h3>
+  <ul>
+    <li><b>A 0.2 alultanított volt.</b> A dev EER a 30. epochnál még csökkent, a tanulási ráta már nulla közelében volt. A 23 ezer paraméter kevés.</li>
+    <li><b>Ötvenkétszer több paraméter</b> több mintát tud egyszerre megtartani. A 0.2-ben romlott A16 és A18 talán visszajön.</li>
+    <li><b>Hosszabb látómező.</b> A konkatenatív támadás (A16) nyomai az illesztéseknél vannak, időben. Ehhez hosszabb összefüggést kell látni.</li>
+    <li><b>A kockázat:</b> a nagyobb modell erősebben ráilleszkedhet a train hat támadására. Ha a dev nagyon jó, de az eval nem javul, ez történt.</li>
+    <li><b>Eredmény:</b> 13 támadásból 12 javult. A16 26%-ról 11%-ra, A18 26%-ról 9%-ra jött vissza. A10 és A12 maradt rossz (36–37%): mindkettő Tacotron-alapú TTS neurális vocoderrel.</li>
+  </ul>
+</section>
+
+<section id="szoszedet">
+  <div class="eyebrow">Szószedet</div>
+  <h2>Fogalmak ezen az oldalon</h2>
+  <dl>
+    <dt>LFCC</dt><dd>Lineáris frekvenciájú kepsztrális együtthatók. Spektrogram, lineáris szűrőbank, logaritmus, DCT. A magas frekvenciákat nem tömöríti össze, mint a mel.</dd>
+    <dt>DCT</dt><dd>Diszkrét koszinusz-transzformáció. A 20 szűrő-energiát 20 együtthatóvá alakítja: c0 a teljes hangerő, a kis indexek a spektrum durva alakja, a nagyok a finom részletei.</dd>
+    <dt>Δ, ΔΔ (delta)</dt><dd>Az együtthatók időbeli változása és a változás változása, 9 oszlopos ablakon számolva. Ettől lesz 20 helyett 60 sor.</dd>
+    <dt>Konvolúció (3×3)</dt><dd>Egy 3×3-as súlyminta végigcsúszik a képen, és minden pontban súlyozott összeget számol a környezetből.</dd>
+    <dt>1×1-es konvolúció</dt><dd>Minden pontban csak a csatornákat keveri, térben nem néz szét. Az átugró ágban a csatornaszámot igazítja.</dd>
+    <dt>Reziduális blokk</dt><dd>Olyan blokk, amelynek kimenete F(x) + x. A törzsnek csak a bemenethez képesti különbséget kell megtanulnia.</dd>
+    <dt>Átugró ág (skip)</dt><dd>Az út, amin a bemenet megkerüli a törzset. Ezen keresztül a gradiens is akadálytalanul visszajut.</dd>
+    <dt>Gradiens</dt><dd>Tanításkor ez mondja meg minden súlynak, merre és mennyit változzon. A háló végétől visszafelé számoljuk.</dd>
+    <dt>Eltűnő gradiens</dt><dd>Mély sima hálóban a gradiens rétegről rétegre zsugorodik, és az első rétegek nem tanulnak. A reziduális blokk ezt oldja meg.</dd>
+    <dt>BatchNorm</dt><dd>Minden csatornát átlag 0, szórás 1 körülire normál, majd két tanulható számmal újraskáláz. Stabilabbá teszi a tanítást.</dd>
+    <dt>MaxPool 2×2</dt><dd>Minden 2×2-es négyzetből a legnagyobbat tartja meg. A képet mindkét irányban felezi.</dd>
+    <dt>Látómező</dt><dd>A bemenet azon része, amire egy mély pont értéke hatással lehet. Rétegről rétegre nő.</dd>
+    <dt>Logit</dt><dd>A modell kimenete a szigmoid előtt. Pozitív = hamis, negatív = valódi.</dd>
+    <dt>EER</dt><dd>Equal Error Rate: az a hibaarány, ahol a tévesen elfogadott hamisak és a tévesen elutasított valódiak aránya egyenlő. Kisebb a jobb.</dd>
+  </dl>
+</section>
+</main>
+
+<script>
+(() => {
+'use strict';
+// ---------- alapok ----------
+const SR = 16000, N = 64000, NFFT = 512, WIN = 320, HOP = 160, NB = 257, NF = 20, NC = 20, T = 401;
+const $ = id => document.getElementById(id);
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+function rng(seed){ return function(){ seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function gauss(r){ let u = 0; while (!u) u = r(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * r()); }
+const clamp = (v, a, b) => v < a ? a : v > b ? b : v;
+const fmt = (v, d = 2) => v.toFixed(d).replace('.', ',');
+const fmtInt = v => String(Math.round(v)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+// ---------- színskálák (adat, témafüggetlen) ----------
+const VIR = [[68,1,84],[59,82,139],[33,145,140],[94,201,98],[253,231,37]];
+const DIV = [[33,102,172],[146,197,222],[247,247,247],[244,165,130],[178,24,43]];
+function cmap(stops, v){ v = clamp(v, 0, 1) * (stops.length - 1); const i = Math.min(Math.floor(v), stops.length - 2), f = v - i, a = stops[i], b = stops[i + 1]; return [a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f, a[2] + (b[2] - a[2]) * f]; }
+
+// ---------- canvas segédek ----------
+function heat(cv, rows, opt = {}){
+  const nr = rows.length, nc = rows[0].length; cv.width = nc; cv.height = nr;
+  const ctx = cv.getContext('2d'), img = ctx.createImageData(nc, nr);
+  let lo = opt.lo, hi = opt.hi;
+  if (lo == null){ const s = []; for (let r = 0; r < nr; r++) for (let c = 0; c < nc; c += 3) s.push(rows[r][c]); s.sort((a, b) => a - b); lo = s[Math.floor(s.length * .02)]; hi = s[Math.floor(s.length * .995)]; }
+  const st = opt.div ? DIV : VIR;
+  for (let r = 0; r < nr; r++){ const y = opt.flip ? nr - 1 - r : r; for (let c = 0; c < nc; c++){ const [R, G, B] = cmap(st, (rows[r][c] - lo) / (hi - lo || 1)); const k = (y * nc + c) * 4; img.data[k] = R; img.data[k+1] = G; img.data[k+2] = B; img.data[k+3] = 255; } }
+  ctx.putImageData(img, 0, 0);
+}
+function plotCtx(cv){ const dpr = window.devicePixelRatio || 1, w = cv.clientWidth || 300, h = +cv.getAttribute('height'); cv.style.height = h + 'px'; cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); const ctx = cv.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h); ctx.fillStyle = css('--bg'); ctx.fillRect(0, 0, w, h); return { ctx, w, h }; }
+function bars(cv, vals, opt = {}){
+  const { ctx, w, h } = plotCtx(cv); const n = vals.length, pad = 4;
+  let lo = opt.lo ?? Math.min(0, ...vals), hi = opt.hi ?? Math.max(0, ...vals); if (hi === lo) hi = lo + 1;
+  const y = v => pad + (h - 2 * pad) * (1 - (v - lo) / (hi - lo)), bw = (w - 2 * pad) / n;
+  ctx.strokeStyle = css('--line'); ctx.beginPath(); ctx.moveTo(pad, y(0)); ctx.lineTo(w - pad, y(0)); ctx.stroke();
+  for (let i = 0; i < n; i++){ const v = vals[i]; ctx.fillStyle = opt.colorFn ? opt.colorFn(i, v) : (v >= 0 ? css('--accent') : css('--spoof')); const a = y(Math.max(0, v)), b = y(Math.min(0, v)); ctx.fillRect(pad + i * bw + bw * .12, a, Math.max(1, bw * .76), Math.max(1, b - a)); }
+  return { ctx, w, h, y, bw, pad };
+}
+
+// ---------- 1. hangszintézis ----------
+const VOW = [[800,1200,2500],[500,1900,2500],[300,2300,3000],[500,900,2400],[320,800,2300]];
+const PLAN = (() => { const r = rng(7), s = []; let t = .18; while (t < 3.7){ const len = .14 + r() * .17, v = VOW[Math.floor(r() * 5)], fric = r() < .4; s.push({ a: t, b: Math.min(t + len, 3.85), v, fric }); t += len + .05 + r() * .09; if (r() < .14) t += .28; } return s; })();
+
+function synth(kind){
+  const r = rng(kind === 'bona' ? 11 : kind === 'voc' ? 12 : 13), x = new Float32Array(N);
+  const env = new Float32Array(N), fm = new Int8Array(N).fill(-1);
+  PLAN.forEach((s, si) => { const a = Math.floor(s.a * SR), b = Math.floor(s.b * SR), ramp = Math.min(480, (b - a) / 3 | 0);
+    for (let i = a; i < b; i++){ const k = i - a; let e = 1; if (k < ramp) e = .5 - .5 * Math.cos(Math.PI * k / ramp); else if (b - i < ramp) e = .5 - .5 * Math.cos(Math.PI * (b - i) / ramp); env[i] = e; fm[i] = si; } });
+  // harmonikus rész: blokkonként (80 minta = 5 ms) számolt amplitúdók
+  const BL = 80; let phi = 0; const off = new Float32Array(80); let jit = 0;
+  for (let b0 = 0; b0 < N; b0 += BL){
+    const t = b0 / SR, si = fm[b0 + BL / 2] ?? -1;
+    if (kind === 'bona') jit = .85 * jit + .15 * gauss(r) * 2.2;
+    const f0 = 122 + 22 * Math.sin(2 * Math.PI * .31 * t) + 9 * Math.sin(2 * Math.PI * 1.15 * t + 1) + (kind === 'bona' ? jit : 0);
+    if (kind === 'gl' && b0 % 256 < BL) for (let h = 0; h < 80; h++) off[h] = r() * 2 * Math.PI;
+    const H = Math.min(79, Math.floor(7900 / f0)), amp = new Float32Array(H + 1);
+    if (si >= 0){ const F = PLAN[si].v;
+      for (let h = 1; h <= H; h++){ const f = h * f0;
+        const q = (c, bw) => ((f - c) / bw) ** 2;
+        let g = .06 + Math.exp(-q(F[0], 150)) + .6 * Math.exp(-q(F[1], 200)) + .35 * Math.exp(-q(F[2], 260)) + .12 * Math.exp(-q(3600, 400));
+        g *= 1 / Math.sqrt(h);
+        if (kind === 'voc') g *= 1 / (1 + (f / 5000) ** 10);
+        amp[h] = g; } }
+    for (let i = b0; i < b0 + BL; i++){ phi += 2 * Math.PI * f0 / SR; if (phi > 2e4) phi -= 2 * Math.PI * Math.floor(2e4 / (2 * Math.PI)); const e = env[i]; if (!e) continue; let s = 0;
+      if (kind === 'gl') for (let h = 1; h <= H; h++) s += amp[h] * Math.sin(h * phi + off[h]); else for (let h = 1; h <= H; h++) s += amp[h] * Math.sin(h * phi);
+      x[i] = .22 * e * s; }
+  }
+  // zajok
+  let hp = 0, px = 0, lp = 0, hp2 = 0, px2 = 0;
+  const aspir = kind === 'voc' ? .004 : .018, fricA = kind === 'voc' ? .05 : .14, bg = kind === 'voc' ? .00012 : .0018, metal = kind === 'gl' ? .02 : 0;
+  const fricMask = new Float32Array(N);
+  PLAN.forEach(s => { if (!s.fric) return; const b = Math.floor(s.a * SR), a = Math.max(0, b - 1500); for (let i = a; i < b + 300 && i < N; i++){ const k = (i - a) / (b + 300 - a); fricMask[i] = Math.sin(Math.PI * k) ** 1.5; } });
+  for (let i = 0; i < N; i++){
+    const w = gauss(r);
+    hp = .78 * (hp + w - px); px = w;                       // felüláteresztő (~3 kHz felett)
+    let fr = hp; if (kind === 'voc'){ lp += .55 * (fr - lp); fr = lp; }   // vocoder: a magas rész tompítva
+    const w2 = gauss(r); hp2 = .3 * (hp2 + w2 - px2); px2 = w2;
+    x[i] += aspir * env[i] * hp + fricA * fricMask[i] * fr + bg * w + metal * env[i] * hp2;
+  }
+  let m = 0; for (let i = 0; i < N; i++) m = Math.max(m, Math.abs(x[i])); for (let i = 0; i < N; i++) x[i] *= .9 / m;
+  return x;
+}
+
+// ---------- FFT, STFT, szűrőbankok, LFCC ----------
+function fft(re, im){ const n = re.length;
+  for (let i = 1, j = 0; i < n; i++){ let bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; if (i < j){ let t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; } }
+  for (let len = 2; len <= n; len <<= 1){ const ang = -2 * Math.PI / len, wr = Math.cos(ang), wi = Math.sin(ang), half = len >> 1;
+    for (let i = 0; i < n; i += len){ let cr = 1, ci = 0; for (let k = 0; k < half; k++){ const a = i + k, b = a + half, tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr; re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti; const nc = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nc; } } } }
+function stft(x){ const w = new Float64Array(NFFT), o = (NFFT - WIN) / 2; for (let i = 0; i < WIN; i++) w[o + i] = .5 - .5 * Math.cos(2 * Math.PI * i / WIN);
+  const re = new Float64Array(NFFT), im = new Float64Array(NFFT), S = [];
+  for (let t = 0; t < T; t++){ const s = t * HOP - NFFT / 2; for (let i = 0; i < NFFT; i++){ const j = s + i; re[i] = (j >= 0 && j < N ? x[j] : 0) * w[i]; im[i] = 0; } fft(re, im); const p = new Float32Array(NB); for (let k = 0; k < NB; k++) p[k] = re[k] * re[k] + im[k] * im[k]; S.push(p); }
+  return S; }
+function triFB(edges){ const fb = []; for (let m = 0; m < NF; m++){ const lo = edges[m], c = edges[m + 1], hi = edges[m + 2], row = new Float32Array(NB); for (let k = 0; k < NB; k++){ const f = k * 8000 / 256; row[k] = Math.max(0, Math.min((f - lo) / (c - lo), (hi - f) / (hi - c))); } fb.push(row); } return fb; }
+const LIN = triFB(Array.from({ length: NF + 2 }, (_, i) => i * 8000 / (NF + 1)));
+const mel = f => 2595 * Math.log10(1 + f / 700), imel = m => 700 * (10 ** (m / 2595) - 1);
+const MEL = triFB(Array.from({ length: NF + 2 }, (_, i) => imel(i * mel(8000) / (NF + 1))));
+const MELC = Array.from({ length: NF + 2 }, (_, i) => imel(i * mel(8000) / (NF + 1)));
+const LINC = Array.from({ length: NF + 2 }, (_, i) => i * 8000 / (NF + 1));
+function lfcc(S){
+  const E = Array.from({ length: NF }, () => new Float32Array(T)), C = Array.from({ length: NC }, () => new Float32Array(T));
+  for (let t = 0; t < T; t++) for (let m = 0; m < NF; m++){ let s = 0; const row = LIN[m]; for (let k = 0; k < NB; k++) s += row[k] * S[t][k]; E[m][t] = Math.log(s + 1e-10); }
+  for (let c = 0; c < NC; c++){ const sc = c === 0 ? Math.sqrt(1 / NF) : Math.sqrt(2 / NF); for (let t = 0; t < T; t++){ let s = 0; for (let m = 0; m < NF; m++) s += E[m][t] * Math.cos(Math.PI * c * (2 * m + 1) / (2 * NF)); C[c][t] = sc * s; } }
+  // delta: 9 oszlopos ablak (librosa alapértelmezés); 1. derivált lineáris, 2. derivált másodfokú illesztéssel
+  const d1w = [-4,-3,-2,-1,0,1,2,3,4].map(n => n / 60), d2w = [-4,-3,-2,-1,0,1,2,3,4].map(n => 2 * (n * n - 20 / 3) / 308);
+  const der = (src, wts) => src.map(row => { const o = new Float32Array(T); for (let t = 0; t < T; t++){ let s = 0; for (let n = -4; n <= 4; n++) s += wts[n + 4] * row[clamp(t + n, 0, T - 1)]; o[t] = s; } return o; });
+  const D1 = der(C, d1w), D2 = der(C, d2w);
+  return { E, C, D1, D2, F: [...C, ...D1, ...D2] };
+}
+function stdRows(rows){ return rows.map(r => { let m = 0; for (const v of r) m += v; m /= r.length; let s = 0; for (const v of r) s += (v - m) ** 2; s = Math.sqrt(s / r.length) || 1; return Float32Array.from(r, v => (v - m) / s); }); }
+
+// ---------- állapot ----------
+const st = { kind: 'bona', step: 0, frame: 120, x: null, S: null, Sdb: null, L: null, Fn: null };
+function compute(){
+  st.x = synth(st.kind); st.S = stft(st.x);
+  let mx = 0; for (const p of st.S) for (const v of p) mx = Math.max(mx, v);
+  st.Sdb = Array.from({ length: NB }, (_, k) => Float32Array.from({ length: T }, (_, t) => Math.max(-80, 10 * Math.log10(st.S[t][k] / mx + 1e-12))));
+  st.L = lfcc(st.S); st.Fn = stdRows(st.L.F);
+}
+
+// ---------- 1. lépések megjelenítése ----------
+const STEPS = [
+  { t: 'Hullámforma', d: ['16 000 minta másodpercenként, 4 másodperc: 64 000 szám. Ez maga a hang: a membrán kitérése az idő függvényében.', 'Ebből közvetlenül nehéz bármit látni. A szótagok és a szünetek kivehetők, de a hangszín, a frekvenciák nem.'] },
+  { t: 'Spektrogram', d: ['A hangot 20 ms-os, egymást átfedő darabokra vágjuk, 10 ms-onként egyet. Mindegyikre Fourier-transzformációt számolunk: megmondja, melyik frekvencián mennyi energia van.', 'Az eredmény 257 frekvenciasor × 401 időoszlop. Lent a mély hangok, fent a magasak (8000 Hz-ig). A vízszintes csíkok a felhangok, a fényes foltok a formánsok.'] },
+  { t: 'Szűrőbank', d: ['A 257 sort túl soknak és zajosnak tartjuk, ezért 20 háromszög alakú szűrővel összefogjuk. Mindegyik szűrő a saját sávjának energiáját adja össze.', 'Ez a lényeges különbség a 0.1 és a 0.2 között. A <b>mel</b> szűrők alul sűrűek, felül ritkák, mert az emberi fül így hall. Az <b>LFCC</b> szűrői egyenletesek. A hamisítás nyomai gyakran a magas tartományban vannak, és ott a mel összemossa őket.'] },
+  { t: 'Log energia', d: ['A 20 szűrő energiájának logaritmusát vesszük. A logaritmus miatt a halk és a hangos részek egyformán jól látszanak, és a hangerő-változás összeadássá válik.', 'Ez már egy 20 × 401-es kép. Lent az 1. szűrő (0–760 Hz), fent a 20. (7240–8000 Hz).'] },
+  { t: 'DCT → 20 LFCC', d: ['A szomszédos szűrők energiái erősen együtt mozognak. A diszkrét koszinusz-transzformáció (DCT) ezt szétbontja: c0 a teljes energia, c1 a spektrum dőlése, a nagyobb indexek egyre finomabb hullámzást írnak le.', 'Megjelenítéshez minden sort külön skáláztunk, különben c0 mindent elnyomna.'] },
+  { t: '+ Δ, ΔΔ → 60 sor', d: ['Végül hozzáadjuk a 20 együttható időbeli változását (Δ, delta) és a változás változását (ΔΔ). Ebből derül ki, mennyire simán vagy szaggatottan mozog a hang.', 'Így lesz 60 sor × 401 oszlop. <b>Ezt kapja a modell.</b> A konvolúciónak ez egy 1 csatornás, 60 × 401-es kép, ugyanúgy, ahogy egy fekete-fehér fénykép.'] },
+];
+let fbMode = 'lin';
+function drawStage(){
+  const box = $('stage'), s = st.step; box.innerHTML = '';
+  const add = html => { const d = document.createElement('div'); d.innerHTML = html; box.appendChild(d); return d; };
+  if (s === 0){
+    add('<canvas class="plot" id="wave" height="150"></canvas><div class="cap"><span>0 s</span><span>2 s</span><span>4 s</span></div>');
+    const { ctx, w, h } = plotCtx($('wave')); ctx.strokeStyle = css('--accent'); ctx.beginPath();
+    for (let px = 0; px < w; px++){ const a = Math.floor(px / w * N), b = Math.floor((px + 1) / w * N); let lo = 0, hi = 0; for (let i = a; i < b; i++){ lo = Math.min(lo, st.x[i]); hi = Math.max(hi, st.x[i]); } ctx.moveTo(px + .5, h / 2 - hi * h / 2); ctx.lineTo(px + .5, h / 2 - lo * h / 2 + .5); }
+    ctx.stroke();
+  } else if (s === 1){
+    add('<div class="heatwrap"><canvas class="heat" id="spec" style="height:220px"></canvas></div><div class="cap"><span>0 s</span><span>függőleges: 0 → 8000 Hz</span><span>4 s</span></div>');
+    heat($('spec'), st.Sdb, { flip: true, lo: -80, hi: 0 });
+  } else if (s === 2){
+    add('<div class="controls"><div class="ctl" role="group" aria-label="Szűrőbank"><button id="fb-lin">Lineáris (LFCC, 0.2 és 0.3)</button><button id="fb-mel">Mel (0.1)</button></div></div><canvas class="plot" id="fbplot" height="170"></canvas><div class="cap"><span>0 Hz</span><span>4000 Hz</span><span>8000 Hz</span></div><div class="readout" id="fb-read"></div>');
+    const draw = () => { $('fb-lin').classList.toggle('on', fbMode === 'lin'); $('fb-mel').classList.toggle('on', fbMode === 'mel');
+      const fb = fbMode === 'lin' ? LIN : MEL, cen = fbMode === 'lin' ? LINC : MELC;
+      const { ctx, w, h } = plotCtx($('fbplot'));
+      // háttér: átlagspektrum
+      const avg = new Float32Array(NB); for (let t = 0; t < T; t++) for (let k = 0; k < NB; k++) avg[k] += st.Sdb[k][t] / T;
+      ctx.fillStyle = css('--accent-soft'); ctx.beginPath(); ctx.moveTo(0, h); for (let k = 0; k < NB; k++) ctx.lineTo(k / 256 * w, h - (avg[k] + 80) / 80 * h * .9); ctx.lineTo(w, h); ctx.fill();
+      ctx.strokeStyle = css('--line'); ctx.beginPath(); ctx.moveTo(w / 2, 0); ctx.lineTo(w / 2, h); ctx.stroke();
+      fb.forEach((row, m) => { ctx.strokeStyle = m % 2 ? css('--accent') : css('--warn'); ctx.lineWidth = 1.6; ctx.beginPath(); let started = false; for (let k = 0; k < NB; k++){ if (row[k] <= 0 && !started) continue; const X = k / 256 * w, Y = h - 6 - row[k] * (h - 20); if (!started){ ctx.moveTo(X, Y); started = true; } else ctx.lineTo(X, Y); if (started && row[k] <= 0) break; } ctx.stroke(); });
+      ctx.lineWidth = 1;
+      const above = cen.slice(1, NF + 1).filter(c => c > 4000).length;
+      $('fb-read').textContent = (fbMode === 'lin' ? 'Lineáris' : 'Mel') + ' szűrőbank: a 20 szűrőből ' + above + ' darab figyel 4000 Hz felett. ' + (fbMode === 'lin' ? 'Minden szűrő 760 Hz széles.' : 'A legfelső szűrő ' + fmtInt(cen[NF + 1] - cen[NF - 1]) + ' Hz széles, a legalsó ' + fmtInt(cen[2] - cen[0]) + ' Hz.');
+    };
+    $('fb-lin').onclick = () => { fbMode = 'lin'; draw(); }; $('fb-mel').onclick = () => { fbMode = 'mel'; draw(); }; draw();
+  } else if (s === 3){
+    add('<div class="heatwrap"><canvas class="heat" id="ener" style="height:150px"></canvas></div><div class="cap"><span>0 s</span><span>függőleges: 1. → 20. szűrő</span><span>4 s</span></div>');
+    heat($('ener'), st.L.E, { flip: true });
+  } else if (s === 4){
+    add('<div class="heatwrap"><canvas class="heat" id="cep" style="height:150px"></canvas></div><div class="cap"><span>0 s</span><span>fentről lefelé: c0 → c19</span><span>4 s</span></div>');
+    heat($('cep'), stdRows(st.L.C), { lo: -2.5, hi: 2.5 });
+  } else {
+    add('<div class="groups"><div class="glabels"><div>c0–19</div><div>Δ</div><div>ΔΔ</div></div><div class="heatwrap"><canvas class="heat" id="feat" style="height:210px"></canvas></div></div><div class="cap"><span style="margin-left:50px">0 s</span><span>60 sor × 401 oszlop</span><span>4 s</span></div>');
+    heat($('feat'), st.Fn, { lo: -2.5, hi: 2.5 });
+  }
+  const wrap = box.querySelector('.heatwrap') || box.firstElementChild;
+  if (wrap){ wrap.style.position = 'relative'; const mk = document.createElement('div'); mk.className = 'marker'; mk.id = 'mk'; mk.style.bottom = '0'; wrap.appendChild(mk); }
+  $('stagetext').innerHTML = STEPS[s].d.map(p => '<p>' + p + '</p>').join('');
+  document.querySelectorAll('#stepper button').forEach(b => b.classList.toggle('on', +b.dataset.step === s));
+  moveMarker();
+}
+function moveMarker(){ const mk = $('mk'); if (!mk) return; if (st.step === 2){ mk.hidden = true; return; } mk.hidden = false; mk.style.left = ((st.frame + .5) / T * 100) + '%'; }
+
+function drawColumn(){
+  const t = st.frame; $('frame-v').textContent = t + '. oszlop · ' + fmt(t * .01) + ' s';
+  // spektrum + szűrők
+  { const { ctx, w, h } = plotCtx($('col-spec'));
+    LIN.forEach((row, m) => { ctx.strokeStyle = css('--line'); ctx.beginPath(); let on = false; for (let k = 0; k < NB; k++){ if (row[k] <= 0){ if (on) break; continue; } const X = k / 256 * w, Y = h - 2 - row[k] * h * .35; if (!on){ ctx.moveTo(X, h - 2); on = true; } ctx.lineTo(X, Y); } ctx.stroke(); });
+    ctx.strokeStyle = css('--accent'); ctx.lineWidth = 1.5; ctx.beginPath(); for (let k = 0; k < NB; k++){ const X = k / 256 * w, Y = h - (st.Sdb[k][t] + 80) / 80 * (h - 6); k ? ctx.lineTo(X, Y) : ctx.moveTo(X, Y); } ctx.stroke(); ctx.lineWidth = 1; }
+  bars($('col-energy'), Array.from({ length: NF }, (_, m) => st.L.E[m][t]), { colorFn: () => css('--accent') });
+  bars($('col-cep'), Array.from({ length: NC }, (_, c) => st.L.C[c][t]));
+  moveMarker();
+}
+
+// ---------- 2. reziduális blokk ----------
+const KERN = { time: [[-1,0,1],[-2,0,2],[-1,0,1]], row: [[-1,-2,-1],[0,0,0],[1,2,1]], smooth: [[1,1,1],[1,1,1],[1,1,1]].map(r => r.map(v => v / 9)), sharp: [[0,-1,0],[-1,5,-1],[0,-1,0]] };
+function conv(rows, k){ const H = rows.length, W = rows[0].length; return rows.map((_, i) => { const o = new Float32Array(W); for (let j = 0; j < W; j++){ let s = 0; for (let a = -1; a <= 1; a++){ const ii = i + a; if (ii < 0 || ii >= H) continue; const r = rows[ii]; for (let b = -1; b <= 1; b++){ const jj = j + b; if (jj < 0 || jj >= W) continue; s += k[a + 1][b + 1] * r[jj]; } } o[j] = s; } return o; }); }
+function bn(rows){ let m = 0, n = 0; for (const r of rows) for (const v of r){ m += v; n++; } m /= n; let s = 0; for (const r of rows) for (const v of r) s += (v - m) ** 2; s = Math.sqrt(s / n) || 1; return rows.map(r => Float32Array.from(r, v => (v - m) / s)); }
+const relu = rows => rows.map(r => Float32Array.from(r, v => v > 0 ? v : 0));
+function corr(a, b){ let ma = 0, mb = 0, n = 0; for (let i = 0; i < a.length; i++) for (let j = 0; j < a[i].length; j++){ ma += a[i][j]; mb += b[i][j]; n++; } ma /= n; mb /= n; let sab = 0, sa = 0, sb = 0; for (let i = 0; i < a.length; i++) for (let j = 0; j < a[i].length; j++){ const p = a[i][j] - ma, q = b[i][j] - mb; sab += p * q; sa += p * p; sb += q * q; } return sab / Math.sqrt(sa * sb || 1); }
+let skipOn = true;
+function drawRes(){
+  const k = KERN[$('kern').value], al = +$('alpha').value / 100; $('alpha-v').textContent = fmt(al);
+  const x = st.Fn, Fx = bn(conv(relu(bn(conv(x, k))), k)).map(r => r.map(v => v * al));
+  const sum = skipOn ? Fx.map((r, i) => r.map((v, j) => v + x[i][j])) : Fx;
+  const out = relu(sum);
+  const o = { div: true, lo: -3, hi: 3 };
+  heat($('m-x'), x, o); heat($('m-f'), Fx, o); heat($('m-s'), sum, o); heat($('m-o'), out, o);
+  $('m-s-l').innerHTML = skipOn ? '<b>F(x) + x</b> · összeadás' : '<b>F(x)</b> · átugró ág nélkül nincs mit hozzáadni';
+  const xr = relu(x), c = al === 0 && !skipOn ? 0 : corr(xr, out);
+  $('res-readout').textContent = 'Mennyire hasonlít a kimenet a bemenet pozitív részére: korreláció = ' + fmt(c) + (al === 0 && !skipOn ? ' (a kimenet csupa nulla)' : '');
+  let msg;
+  if (!skipOn && al === 0) msg = 'Átugró ág nélkül, 0 erősségnél a kimenet csupa nulla. Minden információ elveszett. Egy sima blokk, ha „nem tanult semmit”, mindent eldob, ami a bemenetben volt.';
+  else if (skipOn && al === 0) msg = 'Átugró ággal, 0 erősségnél a kimenet maga a bemenet (pozitív része). A blokk „nem csinál semmit”, és ez teljesen rendben van: a kép változatlanul megy tovább a következő blokkhoz.';
+  else if (skipOn) msg = 'A kimenet a bemenet és a törzs által hozzátett részlet összege. A törzs nem a teljes képet rajzolja újra, csak módosítja azt. Ezt hívják maradéknak (residual).';
+  else msg = 'Átugró ág nélkül a kimenet csak az, amit a törzs kiszámolt. Az eredeti kép minden részletét a törzsnek kell újra előállítania, ha arra a következő blokknak szüksége van.';
+  $('res-insight').textContent = msg;
+  drawNum();
+}
+
+const NX = [[0.8,1.2,0.4,0.0],[1.5,2.1,0.9,0.2],[0.6,1.4,1.8,0.7],[0.0,0.3,1.1,1.6]];
+const NF0 = [[-0.9,0.3,0.5,-0.4],[0.2,0.6,-0.3,0.4],[-0.2,-0.5,0.4,0.6],[-0.3,0.2,-0.6,-1.0]];
+function drawNum(){
+  const al = +$('alpha').value / 100, F = NF0.map(r => r.map(v => v * al)), S = F.map((r, i) => r.map((v, j) => v + (skipOn ? NX[i][j] : 0))), O = S.map(r => r.map(v => Math.max(0, v)));
+  const g = (t, M) => `<div class="ngw"><h4>${t}</h4><div class="ng">${M.flat().map(v => `<div class="${Math.abs(v) < .005 ? 'zero' : v < 0 ? 'neg' : ''}">${fmt(Math.abs(v) < .005 ? 0 : v, 1)}</div>`).join('')}</div></div>`;
+  $('numgrids').innerHTML = skipOn ? g('x', NX) + '<span class="op">+</span>' + g('F(x)', F) + '<span class="op">=</span>' + g('összeg', S) + '<span class="op">→ ReLU →</span>' + g('kimenet', O)
+                                   : g('F(x)', F) + '<span class="op">→ ReLU →</span>' + g('kimenet', O) + '<span class="op small">(x nem jut tovább)</span>';
+}
+function drawLR(){
+  const e = +$('ep').value, lr = ep => 1e-3 * (1 + Math.cos(Math.PI * (ep - 1) / 30)) / 2; $('ep-v').textContent = e + '. epoch · lr = ' + lr(e).toExponential(2).replace('.', ',');
+  const { ctx, w, h } = plotCtx($('lrplot')); const pl = 52, pb = 22, pt = 10, X = ep => pl + (w - pl - 10) * (ep - 1) / 29, Y = v => pt + (h - pt - pb) * (1 - v / 1e-3);
+  ctx.font = '11px ' + css('--mono'); ctx.strokeStyle = css('--line'); ctx.fillStyle = css('--muted');
+  [0, 5e-4, 1e-3].forEach(v => { ctx.beginPath(); ctx.moveTo(pl, Y(v)); ctx.lineTo(w - 10, Y(v)); ctx.stroke(); ctx.fillText(v ? v.toExponential(0) : '0', 4, Y(v) + 4); });
+  [1, 10, 20, 30].forEach(ep => ctx.fillText(String(ep), X(ep) - 4, h - 5));
+  ctx.strokeStyle = css('--accent'); ctx.lineWidth = 2; ctx.beginPath(); for (let ep = 1; ep <= 30; ep += .25){ ep === 1 ? ctx.moveTo(X(ep), Y(lr(ep))) : ctx.lineTo(X(ep), Y(lr(ep))); } ctx.stroke(); ctx.lineWidth = 1;
+  ctx.fillStyle = css('--warn'); ctx.beginPath(); ctx.arc(X(e), Y(lr(e)), 5, 0, 2 * Math.PI); ctx.fill();
+}
+
+// ---------- 3. gradiens ----------
+function drawGrad(){
+  const L = +$('depth').value, m = +$('fac').value / 100; $('depth-v').textContent = L; $('fac-v').textContent = fmt(m);
+  const r = rng(5), plain = new Float64Array(L), res = new Float64Array(L); let gp = 1, gr = 1;
+  const nz = Array.from({ length: L }, () => [gauss(r), gauss(r)]);
+  for (let l = L - 1; l >= 0; l--){ plain[l] = gp; res[l] = gr; gp *= m * (1 + .08 * nz[l][0]); gr *= 1 + .06 * nz[l][1]; }
+  const { ctx, w, h } = plotCtx($('gradplot')); const padL = 44, padB = 22, padT = 8, lo = -8, hi = 1;
+  const Y = v => padT + (h - padT - padB) * (1 - (Math.log10(Math.max(v, 1e-8)) - lo) / (hi - lo));
+  ctx.font = '11px ' + css('--mono'); ctx.fillStyle = css('--muted'); ctx.strokeStyle = css('--line');
+  for (let e = lo; e <= hi; e += 1){ if (e % 2 && e !== 1) continue; const y = Y(10 ** e); ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(w - 4, y); ctx.stroke(); ctx.fillText(e === 0 ? '1' : '10^' + e, 4, y + 4); }
+  const bw = (w - padL - 6) / L;
+  for (let l = 0; l < L; l++){ const x0 = padL + l * bw; ctx.fillStyle = css('--spoof'); ctx.fillRect(x0 + bw * .1, Y(plain[l]), bw * .38, h - padB - Y(plain[l])); ctx.fillStyle = css('--skip'); ctx.fillRect(x0 + bw * .52, Y(res[l]), bw * .38, h - padB - Y(res[l])); }
+  ctx.fillStyle = css('--muted'); ctx.fillText('1. réteg (eleje)', padL, h - 6); const lab = L + '. réteg (vége)'; ctx.fillText(lab, w - 6 - ctx.measureText(lab).width, h - 6);
+  $('grad-readout').textContent = 'Az 1. réteghez visszaérő jel · sima: ' + plain[0].toExponential(1).replace('.', ',') + ' · reziduális: ' + fmt(res[0]) + '. A sima háló első rétege ' + fmtInt(res[0] / plain[0]) + '-szor gyengébb jelet kap.';
+}
+
+// ---------- 4. 1×1 konvolúció ----------
+let cw, cin, chov = -1;
+function rollC(){ const r = rng(Math.floor(Math.random() * 1e9)); cin = Array.from({ length: 16 }, () => Math.max(0, gauss(r) * .9 + .3)); cw = Array.from({ length: 32 }, () => Array.from({ length: 16 }, () => gauss(r) * .35)); drawC(); }
+function drawC(){
+  bars($('c-in'), cin, { colorFn: () => css('--accent'), lo: 0 });
+  const out = cw.map(row => row.reduce((s, w, i) => s + w * cin[i], 0));
+  { const { ctx, w, h } = plotCtx($('c-w')); const cwid = w / 16, ch = h / 32;
+    for (let j = 0; j < 32; j++) for (let i = 0; i < 16; i++){ const [R, G, B] = cmap(DIV, (cw[j][i] + 1) / 2); ctx.fillStyle = `rgb(${R|0},${G|0},${B|0})`; ctx.fillRect(i * cwid + .5, j * ch + .5, cwid - 1, ch - 1); }
+    if (chov >= 0){ ctx.strokeStyle = css('--fg'); ctx.lineWidth = 2; ctx.strokeRect(1, chov * ch + 1, w - 2, ch - 2); ctx.lineWidth = 1; } }
+  bars($('c-out'), out, { colorFn: i => i === chov ? css('--warn') : (out[i] >= 0 ? css('--accent') : css('--spoof')) });
+  if (chov >= 0){ const terms = cw[chov].map((w, i) => fmt(w) + '·' + fmt(cin[i])).slice(0, 4).join(' + '); $('c-readout').textContent = (chov + 1) + '. kimenő csatorna = ' + terms + ' + … (16 tag) = ' + fmt(out[chov]); }
+  else $('c-readout').textContent = 'Minden kimenő csatorna a 16 bemenő érték súlyozott összege. Válassz egy sort a súlymátrixban.';
+}
+function hoverC(ev){ const rc = $('c-w').getBoundingClientRect(); const j = Math.floor((ev.clientY - rc.top) / rc.height * 32); chov = clamp(j, 0, 31); drawC(); }
+
+// ---------- 5. öt blokk ----------
+const STAGES = [
+  { n: 'Bemenet', c: 1, f: 60, t: 401, p: 0, rf: 1, d: 'Az LFCC-kép: 1 csatorna, 60 sor, 401 oszlop. Minden pont egy együttható egy 10 ms-os pillanatban.' },
+  { n: '1. blokk', c: 16, f: 30, t: 200, p: 2560, rf: 6, d: '1 → 16 csatorna. Két 3×3-as konvolúció, átugró ág 1×1-es konvolúcióval. Pool után 30 × 200. Egyszerű helyi mintákat talál: éleket, hirtelen változásokat.' },
+  { n: '2. blokk', c: 32, f: 15, t: 100, p: 14528, rf: 16, d: '16 → 32 csatorna, pool után 15 × 100. Az 1. blokk mintáiból rövid, összetettebb mintázatokat rak össze, kb. 160 ms-on.' },
+  { n: '3. blokk', c: 64, f: 7, t: 50, p: 57728, rf: 36, d: '32 → 64 csatorna, pool után 7 × 50. Egy pont már kb. egy szótagnyi hangot lát (360 ms).' },
+  { n: '4. blokk', c: 128, f: 3, t: 25, p: 230144, rf: 76, d: '64 → 128 csatorna, pool után 3 × 25. A látómező kb. 0,76 s, az összes sor átfedve.' },
+  { n: '5. blokk', c: 256, f: 1, t: 12, p: 919040, rf: 156, d: '128 → 256 csatorna, pool után 1 × 12. A paraméterek háromnegyede itt van. Egy pont kb. 1,56 s hangot lát.' },
+  { n: 'Fej', c: 1, f: 1, t: 1, p: 257, rf: 401, d: 'Átlagolás a 12 oszlopon, dropout, egy lineáris réteg: 256 → 1. Az eredmény a logit.' },
+];
+let slabSel = 5;
+function drawSlabs(){
+  const svg = $('slabs'); let x = 14, out = '';
+  const fg = css('--fg'), mu = css('--muted'), ac = css('--accent'), as = css('--accent-soft'), ln = css('--line'), sf = css('--surface');
+  STAGES.forEach((s, i) => {
+    const hgt = 10 + 120 * s.f / 60, depth = 6 + 34 * s.t / 401, thick = i === 6 ? 10 : 8 + 7 * Math.log2(s.c + 1), y0 = 150 - hgt;
+    const sel = i === slabSel, fill = sel ? as : sf, stroke = sel ? ac : mu;
+    out += `<g class="clk" data-i="${i}" tabindex="0" role="button" aria-label="${s.n}">`;
+    out += `<polygon points="${x},${y0} ${x + depth},${y0 - depth * .6} ${x + depth + thick},${y0 - depth * .6} ${x + thick},${y0}" fill="${fill}" stroke="${stroke}"/>`;
+    out += `<polygon points="${x + thick},${y0} ${x + thick + depth},${y0 - depth * .6} ${x + thick + depth},${150 - depth * .6} ${x + thick},150" fill="${fill}" stroke="${stroke}"/>`;
+    out += `<rect x="${x}" y="${y0}" width="${thick}" height="${hgt}" fill="${fill}" stroke="${stroke}"/>`;
+    out += `<text x="${x}" y="178" fill="${sel ? fg : mu}" font-size="12" font-weight="${sel ? 600 : 400}">${s.n}</text>`;
+    out += `<text x="${x}" y="196" fill="${mu}" font-size="11">${i === 6 ? '256 → 1' : s.c + '×' + s.f + '×' + s.t}</text></g>`;
+    const w = thick + depth; if (i < 6) out += `<path d="M${x + w + 6},120 L${x + w + 22},120" stroke="${ln}" stroke-width="2" marker-end="url(#ar)"/>`;
+    x += w + 30;
+  });
+  svg.setAttribute('viewBox', `0 0 ${Math.max(960, x)} 210`);
+  svg.innerHTML = `<defs><marker id="ar" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="${ln}"/></marker></defs>` + out;
+  svg.querySelectorAll('.clk').forEach(g => { const f = () => { slabSel = +g.dataset.i; drawSlabs(); }; g.onclick = f; g.onkeydown = e => { if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); f(); } }; });
+  const s = STAGES[slabSel];
+  $('slab-info').innerHTML = `<h3 style="margin-top:4px">${s.n}</h3><p>${s.d}</p><div class="readout">alak: ${slabSel === 6 ? '256 → 1' : s.c + ' × ' + s.f + ' × ' + s.t} · tanulható szám: ${fmtInt(s.p)}${slabSel > 0 && slabSel < 6 ? ' · látómező: ' + s.rf + ' oszlop ≈ ' + fmt(s.rf * .01) + ' s' : ''}</div>`;
+}
+let rfSel = 5, rfCenter = [30, 200];
+function drawRF(){
+  const s = STAGES[rfSel], half = s.rf / 2, [cy, cx] = rfCenter;
+  const x0 = clamp(cx - half, 0, 401), x1 = clamp(cx + half, 0, 401), y0 = clamp(cy - half, 0, 60), y1 = clamp(cy + half, 0, 60);
+  const ac = css('--warn');
+  $('rf-box').innerHTML = `<rect x="${x0}" y="${y0}" width="${Math.max(1, x1 - x0)}" height="${Math.max(1, y1 - y0)}" fill="none" stroke="${ac}" stroke-width="2" vector-effect="non-scaling-stroke"/><rect x="${cx - .5}" y="${cy - .5}" width="1" height="1" fill="${ac}"/>`;
+  document.querySelectorAll('#rf-btns button').forEach(b => b.classList.toggle('on', +b.dataset.i === rfSel));
+  $('rf-readout').textContent = s.n + ': egy pont kb. ' + s.rf + ' oszlopot (' + fmt(s.rf * .01) + ' s) és ' + Math.min(60, s.rf) + ' sort lát a bemenetből' + (s.rf >= 60 ? ', vagyis az összes sort.' : '.');
+}
+function drawPar(){
+  const ps = STAGES.slice(1), tot = 1224257;
+  const { ctx, w, h } = plotCtx($('parplot')); const rowH = h / ps.length, lw = 74, max = Math.max(...ps.map(s => s.p));
+  ctx.font = '12px ' + css('--mono');
+  ps.forEach((s, i) => { const y = i * rowH; ctx.fillStyle = css('--muted'); ctx.fillText(s.n, 0, y + rowH * .62); const bw = (w - lw - 150) * s.p / max; ctx.fillStyle = i === 4 ? css('--accent') : css('--accent-soft'); ctx.strokeStyle = css('--accent'); ctx.fillRect(lw, y + rowH * .2, Math.max(2, bw), rowH * .6); ctx.strokeRect(lw + .5, y + rowH * .2 + .5, Math.max(2, bw) - 1, rowH * .6 - 1); ctx.fillStyle = css('--fg'); ctx.fillText(fmtInt(s.p) + ' · ' + fmt(s.p / tot * 100, 1) + '%', lw + Math.max(2, bw) + 8, y + rowH * .62); });
+}
+
+// ---------- 6. fej ----------
+let hv, hw, hb, hmask, hTrain = false, hpool;
+function rollH(){ const r = rng(Math.floor(Math.random() * 1e9)); hpool = Array.from({ length: 12 }, () => Math.max(0, gauss(r) * .6 + .7)); hv = Array.from({ length: 256 }, () => Math.max(0, gauss(r) * .55 + .35)); hv[0] = hpool.reduce((a, b) => a + b, 0) / 12; hw = Array.from({ length: 256 }, () => gauss(r) * .12); hb = -.2; hmask = Array.from({ length: 256 }, () => r() < .3); drawH(); }
+function drawH(){
+  { const { ctx, w, h } = plotCtx($('h-pool')); const cw = Math.min(46, (w - 150) / 12); ctx.font = '11px ' + css('--mono');
+    hpool.forEach((v, i) => { const [R, G, B] = cmap(VIR, v / 2); ctx.fillStyle = `rgb(${R|0},${G|0},${B|0})`; ctx.fillRect(i * cw, 14, cw - 3, 34); });
+    ctx.fillStyle = css('--muted'); ctx.fillText('1. csatorna, 12 érték', 0, 10); const ax = 12 * cw + 12; ctx.fillText('→ átlag', ax, 36);
+    const [R, G, B] = cmap(VIR, hv[0] / 2); ctx.fillStyle = `rgb(${R|0},${G|0},${B|0})`; ctx.fillRect(ax + 62, 14, cw - 3, 34); ctx.fillStyle = css('--fg'); ctx.fillText(fmt(hv[0]), ax + 62, 64); }
+  const used = hv.map((v, i) => hTrain ? (hmask[i] ? 0 : v / .7) : v);
+  bars($('h-bars'), used, { lo: 0, colorFn: i => hTrain && hmask[i] ? css('--line') : css('--accent') });
+  const logit = used.reduce((s, v, i) => s + v * hw[i], hb);
+  $('h-readout').textContent = 'logit = Σ wᵢ·hᵢ + b = ' + fmt(logit) + (hTrain ? ' (dropout miatt minden futásnál kicsit más)' : '') + ' → ' + (logit > 0 ? 'hamis' : 'valódi') + '. A súlyok itt véletlenek, a betanított modellben ezeket tanulja meg.';
+  $('h-train').classList.toggle('on', hTrain); $('h-train').setAttribute('aria-pressed', String(hTrain));
+}
+function drawSig(){ const z = +$('logit').value / 10, p = 1 / (1 + Math.exp(-z)); $('logit-v').textContent = fmt(z, 1); $('g-i').style.left = (p * 100) + '%';
+  $('g-text').innerHTML = `<span class="big">${fmt(p * 100, 1)}%</span> <span class="muted">eséllyel hamis</span> &nbsp; <span class="pill ${z > 0 ? 'spoof' : 'bona'}">${z > 0 ? 'hamis' : 'valódi'}</span><p class="small muted">0-s logitnál pontosan 50%. +4-nél már 98%, −4-nél 2%.</p>`; }
+
+// ---------- 0. áttekintő ábra ----------
+function drawPipe(){
+  const items = [['Hang', '64 000 minta', '#lfcc'], ['LFCC', '1×60×401', '#lfcc'], ['5 reziduális blokk', '→ 256×1×12', '#ot'], ['Átlag', '256', '#fej'], ['Lineáris', '256 → 1', '#fej'], ['Logit', '>0: hamis', '#fej']];
+  const fg = css('--fg'), mu = css('--muted'), ac = css('--accent'), as = css('--accent-soft'), sf = css('--surface'), ln = css('--line');
+  const W = [110, 120, 220, 100, 120, 120]; let x = 6, out = `<defs><marker id="ar0" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="${mu}"/></marker></defs>`;
+  items.forEach((it, i) => { const big = i === 2; out += `<a href="${it[2]}" class="clk"><rect x="${x}" y="35" width="${W[i]}" height="74" rx="8" fill="${big ? as : sf}" stroke="${big ? ac : ln}" stroke-width="${big ? 2 : 1}"/><text x="${x + W[i] / 2}" y="68" text-anchor="middle" fill="${fg}" font-size="13" font-weight="600" style="font-family:var(--font)">${it[0]}</text><text x="${x + W[i] / 2}" y="88" text-anchor="middle" fill="${mu}" font-size="11">${it[1]}</text></a>`;
+    if (i < items.length - 1) out += `<path d="M${x + W[i] + 3},72 L${x + W[i] + 24},72" stroke="${mu}" stroke-width="1.5" marker-end="url(#ar0)"/>`; x += W[i] + 30; });
+  out += `<text x="${6 + 110 + 30 + 120 + 30 + 110}" y="24" text-anchor="middle" fill="${ac}" font-size="11">ez az új rész</text>`;
+  $('pipe').setAttribute('viewBox', `0 0 ${x} 130`); $('pipe').innerHTML = out;
+}
+function drawResDiag(){
+  const fg = css('--fg'), mu = css('--muted'), ac = css('--accent'), as = css('--accent-soft'), sf = css('--surface'), sk = css('--skip'), ln = css('--line');
+  const box = (x, w, t, s, hl) => `<rect x="${x}" y="92" width="${w}" height="50" rx="7" fill="${hl ? as : sf}" stroke="${hl ? ac : ln}"/><text x="${x + w / 2}" y="114" text-anchor="middle" fill="${fg}" font-size="12">${t}</text><text x="${x + w / 2}" y="131" text-anchor="middle" fill="${mu}" font-size="10">${s}</text>`;
+  const arr = (x1, x2) => `<path d="M${x1},117 L${x2 - 2},117" stroke="${mu}" stroke-width="1.5" marker-end="url(#ar1)"/>`;
+  let o = `<defs><marker id="ar1" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="${mu}"/></marker><marker id="ar2" markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8 Z" fill="${sk}"/></marker></defs>`;
+  o += `<text x="20" y="121" fill="${fg}" font-size="15" font-weight="600">x</text>` + arr(36, 66);
+  o += box(66, 120, 'conv 3×3', 'c_in → c_out', true) + arr(186, 206) + box(206, 70, 'BN', '', false) + arr(276, 296) + box(296, 74, 'ReLU', '', false) + arr(370, 390) + box(390, 120, 'conv 3×3', 'c_out → c_out', true) + arr(510, 530) + box(530, 70, 'BN', '', false) + arr(600, 640);
+  o += `<circle cx="660" cy="117" r="18" fill="${sf}" stroke="${sk}" stroke-width="2"/><text x="660" y="123" text-anchor="middle" fill="${sk}" font-size="20" font-weight="600">+</text>` + arr(678, 708);
+  o += box(708, 74, 'ReLU', '', false) + arr(782, 812) + `<text x="816" y="121" fill="${fg}" font-size="13" font-weight="600">kimenet</text>`;
+  o += `<path d="M44,117 L44,40 L660,40 L660,97" fill="none" stroke="${sk}" stroke-width="2.2" marker-end="url(#ar2)"/>`;
+  o += `<rect x="290" y="24" width="190" height="32" rx="6" fill="${sf}" stroke="${sk}"/><text x="385" y="45" text-anchor="middle" fill="${sk}" font-size="12">átugró ág: x (vagy 1×1 conv + BN)</text>`;
+  o += `<text x="66" y="170" fill="${mu}" font-size="11">törzs: F(x)</text><path d="M66,160 L600,160" stroke="${ac}" stroke-width="1" stroke-dasharray="3 3"/>`;
+  $('resdiag').innerHTML = o;
+}
+
+// ---------- összekötés ----------
+function all(){ compute(); drawStage(); drawColumn(); drawRes(); drawRF(); rfHeat(); }
+function rfHeat(){ heat($('rf-map'), st.Fn, { lo: -2.5, hi: 2.5 }); }
+function themeRedraw(){ drawPipe(); drawResDiag(); drawStage(); drawColumn(); drawGrad(); drawC(); drawSlabs(); drawRF(); drawPar(); drawH(); drawLR(); }
+
+document.querySelectorAll('[data-kind]').forEach(b => b.onclick = () => { st.kind = b.dataset.kind; document.querySelectorAll('[data-kind]').forEach(x => x.classList.toggle('on', x === b)); all(); });
+document.querySelectorAll('#stepper button').forEach(b => b.onclick = () => { st.step = +b.dataset.step; drawStage(); });
+$('frame').oninput = e => { st.frame = +e.target.value; drawColumn(); };
+$('kern').onchange = drawRes; $('alpha').oninput = drawRes;
+$('skipbtn').onclick = () => { skipOn = !skipOn; $('skipbtn').classList.toggle('on', skipOn); $('skipbtn').setAttribute('aria-pressed', String(skipOn)); $('skipbtn').textContent = 'Átugró ág: ' + (skipOn ? 'be' : 'ki'); drawRes(); };
+$('depth').oninput = drawGrad; $('fac').oninput = drawGrad;
+$('c-roll').onclick = rollC; $('c-w').addEventListener('mousemove', hoverC); $('c-w').addEventListener('click', hoverC);
+$('h-train').onclick = () => { hTrain = !hTrain; if (hTrain){ const r = rng(Math.floor(Math.random() * 1e9)); hmask = hmask.map(() => r() < .3); } drawH(); };
+$('h-roll').onclick = rollH; $('ep').oninput = drawLR; $('logit').oninput = drawSig;
+const rfb = $('rf-btns'); STAGES.slice(1, 6).forEach((s, k) => { const b = document.createElement('button'); b.textContent = s.n; b.dataset.i = k + 1; b.onclick = () => { rfSel = k + 1; drawRF(); }; rfb.appendChild(b); });
+$('rf-map').addEventListener('click', e => { const rc = e.currentTarget.getBoundingClientRect(); rfCenter = [clamp(Math.floor((e.clientY - rc.top) / rc.height * 60), 0, 59), clamp(Math.floor((e.clientX - rc.left) / rc.width * 401), 0, 400)]; drawRF(); });
+
+compute(); drawPipe(); drawResDiag(); drawStage(); drawColumn(); drawRes(); drawGrad(); rollC(); drawSlabs(); rfHeat(); drawRF(); drawPar(); rollH(); drawSig(); drawLR();
+let rt; window.addEventListener('resize', () => { clearTimeout(rt); rt = setTimeout(themeRedraw, 150); });
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', themeRedraw);
+new MutationObserver(themeRedraw).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+})();
+</script>
