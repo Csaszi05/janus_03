@@ -86,7 +86,7 @@ Viszonyítás a janus_01-ből (teljes ASVspoof 2019 LA eval halmaz, 71 237 fájl
 - **A támadásonkénti számok viszont szórnak:** A15 6.2 vs 17.6%, A13 18.2 vs 12.9%, A14 2.5 vs 5.2%. Egy-egy támadásnál a futások közti különbség 5–11 százalékpont is lehet. A dolgozatban a támadásonkénti számokat óvatosan kell értelmezni; egyetlen futásból csak a nagy különbségek (pl. A16 26 → 11%) megbízhatók.
 - **A dolgozat a Run 5b számait használja,** mert ehhez van mentett checkpoint és pontszámfájl.
 
-## Seedes futások: Janus 0.1–0.3 × seed 0/1/2 (tervezett, határnap: 2026-11-05)
+## Seedes futások: Janus 0.1–0.3 × seed 0/1/2 (Kaggle, mind a 9 futás lefutott)
 
 **Miért:** a 7. fejezetbe átlag ± szórás kell, nem egyetlen futás. Különösen a 0.1 → 0.2 lépés (23.52 → 21.16%, 2.4 pont) kérdéses: a Run 5 / 5b párból látszik, hogy támadásonként 5–11 pont is lehet a futások közti különbség.
 
@@ -104,4 +104,66 @@ Viszonyítás a janus_01-ből (teljes ASVspoof 2019 LA eval halmaz, 71 237 fájl
 
 **Összesítés:** `python scripts/summarize_seeds.py --runs <letöltött out mappák> --out <mappa>` → `summary.md` (összesített dev/eval EER, támadásonként, K2: ismert A16+A19 vs. ismeretlen A07–A15, A17, A18; mindegyik átlag ± mintaszórás). Ellenőrizve a Run 5b mentett pontszámain: eval 14.08% (egyezik); K2: ismert 7.95%, ismeretlen 15.20%.
 
-**Eredmény:** (futások után)
+### Eredmény
+
+**Futások:** 0.1 a janus_01 `a2109dd` commitjáról, `config_mel.yaml`. 0.2 ugyanerről a commitról, `config.yaml`. 0.3 a janus_03 `6bbeef3` commitjáról. Mind a 9 futás 30 epochot tanult, az evalhoz a legjobb dev epoch checkpointja ment (22–29. epoch). Összesítés: `summarize_seeds.py --runs <mel out> <lfcc out>`, a kimenet a repón kívül van (`out/` gitignore alatt).
+
+**Ellenőrizve:**
+- Mind a 9 `eval_scores.csv` ugyanazt a 71 237 fájlt tartalmazza, ugyanabban a sorrendben, és nincs bennük NaN.
+- Minden `eval_per_attack.csv` pontosan egyezik a pontszámokból újraszámolt értékekkel.
+- A korábbi egyedi futások beleesnek a seedes tartományba: Run 3 23.52%, Run 4 21.16%, Run 5b 14.08%.
+
+Átlag ± mintaszórás (ddof=1), n = 3 seed verziónként:
+
+| Verzió | Dev EER (legjobb epoch) | Eval EER | Eval min–max | Ismert (A16, A19) | Ismeretlen |
+|---|---|---|---|---|---|
+| 0.1 (mel, JanusCNN) | 8.31 ± 1.04 | **24.32 ± 3.48** | 21.23–28.09 | 11.58 ± 2.96 | 26.46 ± 3.70 |
+| 0.2 (LFCC, JanusCNN) | 11.02 ± 0.91 | **21.01 ± 1.69** | 19.83–22.95 | 18.38 ± 1.37 | 21.50 ± 1.77 |
+| 0.3 (LFCC, JanusResNet) | 4.84 ± 0.20 | **14.20 ± 0.39** | 13.76–14.46 | 7.62 ± 0.70 | 15.37 ± 0.38 |
+
+Futásonként:
+
+| Verzió | Seed | Dev EER | Eval EER | Ismert | Ismeretlen |
+|---|---|---|---|---|---|
+| 0.1 | 0 | 8.95 | 28.09 | 14.93 | 30.45 |
+| 0.1 | 1 | 8.87 | 21.23 | 9.31 | 23.12 |
+| 0.1 | 2 | 7.11 | 23.65 | 10.49 | 25.82 |
+| 0.2 | 0 | 10.70 | 20.26 | 17.83 | 20.70 |
+| 0.2 | 1 | 12.05 | 22.95 | 19.94 | 23.53 |
+| 0.2 | 2 | 10.32 | 19.83 | 17.37 | 20.27 |
+| 0.3 | 0 | 4.72 | 13.76 | 6.82 | 14.93 |
+| 0.3 | 1 | 4.73 | 14.46 | 8.10 | 15.60 |
+| 0.3 | 2 | 5.07 | 14.39 | 7.93 | 15.58 |
+
+Támadásonként (eval EER %, átlag ± szórás):
+
+| Támadás | 0.1 | 0.2 | 0.3 |
+|---|---|---|---|
+| A07 | 21.81 ± 9.92 | 31.01 ± 1.69 | 14.50 ± 2.02 |
+| A08 | 6.46 ± 1.24 | 0.76 ± 0.07 | 0.75 ± 0.29 |
+| A09 | 3.90 ± 1.12 | 0.82 ± 0.13 | 0.43 ± 0.20 |
+| A10 | 42.21 ± 4.30 | 36.67 ± 1.77 | 38.42 ± 1.62 |
+| A11 | 40.22 ± 9.13 | 5.85 ± 1.15 | 1.95 ± 0.41 |
+| A12 | 50.25 ± 2.54 | 40.25 ± 4.87 | 36.36 ± 1.26 |
+| A13 | 25.47 ± 3.29 | 34.09 ± 7.21 | 18.82 ± 2.72 |
+| A14 | 12.60 ± 0.72 | 3.01 ± 0.21 | 3.00 ± 0.73 |
+| A15 | 31.18 ± 7.44 | 7.30 ± 1.11 | 8.38 ± 2.03 |
+| A16 | 14.18 ± 3.48 | 25.98 ± 2.09 | 10.46 ± 0.92 |
+| A17 | 22.63 ± 0.47 | 11.42 ± 0.92 | 7.84 ± 0.25 |
+| A18 | 8.32 ± 2.64 | 25.64 ± 3.17 | 9.78 ± 0.56 |
+| A19 | 8.75 ± 2.08 | 8.72 ± 0.39 | 3.96 ± 0.41 |
+
+**Tanulságok:**
+- **A 0.2 → 0.3 javulás biztos.** Eval 21.0 → 14.2%. A 0.3 mindhárom seedje jobb a 0.2 mindhárom seedjénél, a tartományok nem fednek át (Welch-féle t-próba, p = 0.016). Az ismert és az ismeretlen támadásokon is javult (p = 0.001 és 0.023).
+- **A 0.1 → 0.2 javulás összesítve nem igazolható.** Eval 24.3 → 21.0%, a különbség 3.3 pont, de a tartományok átfednek (0.1 legjobb seedje 21.23%, 0.2 legrosszabbja 22.95%), Welch p = 0.24. Az egyedi futásokból látott 2.4 pontos javulás (Run 3 → Run 4) a seedek közötti szórás nagyságrendje.
+- **Az LFCC-re váltás valódi hatása a hibaprofil átrendeződése:**
+  - Sokat javult: A11 40 → 6%, A15 31 → 7%, A14 13 → 3%, A17 23 → 11%, A08 6 → 1%.
+  - Sokat romlott: A16 14 → 26%, A18 8 → 26%.
+  - K2: az ismert támadások romlottak (11.6 → 18.4%, p = 0.04), az ismeretlenek javultak (26.5 → 21.5%), de ez utóbbi n = 3 mellett nem szignifikáns (p = 0.13).
+  - A Run 4 tanulságai („nincs ingyen ebéd”) seedekkel is megállnak.
+- **A stabilitás verzióról verzióra nő.**
+  - Eval szórás: 0.1: ±3.5, 0.2: ±1.7, 0.3: ±0.4 pont.
+  - A 0.1-nél egyes támadásoknál ±9–10 pont (A07, A11), tehát a 0.1 támadásonkénti számai egyetlen futásból (Run 1, Run 3) nem megbízhatók. Az A07 például a Run 1-ben 4.2%, a seedes átlag 21.8%.
+- **A dev EER nem jelzi előre az evalt.** A 0.1 dev-en jobb, mint a 0.2 (8.3 vs 11.0%, p = 0.03), eval-on mégis rosszabb. A dev halmazban csak a train támadásai vannak (A01–A06). A dev EER a legjobb epoché, és ugyanazon a halmazon történt a kiválasztás, ezért optimista becslés.
+- **A10 és A12 minden verzióban 36–50% között marad.** Mindkettő Tacotron-alapú, neurális vocoderrel. Ezek maradnak a fő korlátok.
+- **A dolgozat 7. fejezete ezeket a seedes számokat használja,** átlag ± szórás és min–max formában. A p-értékek n = 3 mellett gyenge bizonyítékok, csak kiegészítésként szerepelnek.
